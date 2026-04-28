@@ -1,0 +1,9 @@
+{
+  "name": "spin-the-wheel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Spin the wheel web app for choosing a random name.",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

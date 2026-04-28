@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spin the Wheel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=Manrope:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="landing">
+      <section class="wheel-panel">
+        <div class="wheel-stage">
+          <div class="pointer-wrap">
+            <div class="pointer"></div>
+          </div>
+          <div
+            id="wheel-shell"
+            class="wheel-shell"
+            role="button"
+            tabindex="0"
+            aria-label="Spin the wheel"
+          >
+            <canvas id="wheel" width="900" height="900" aria-hidden="true"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <div class="landing-actions">
+        <button id="add-names-button" class="primary-button">Add Names</button>
+        <button id="customize-button" class="ghost-button">Customise</button>
+        <label class="theme-toggle" for="theme-toggle-input">
+          <input id="theme-toggle-input" type="checkbox" />
+          <span class="theme-toggle-track">
+            <span class="theme-toggle-thumb"></span>
+          </span>
+          <span id="theme-toggle-label">☾</span>
+        </label>
+      </div>
+    </main>
+
+    <div id="winner-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="true"></div>
+      <div
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="winner-modal-title"
+        aria-describedby="winner-modal-name"
+      >
+        <button id="close-modal-button" class="modal-close" type="button" aria-label="Close winner popup">
+          ×
+        </button>
+        <div class="modal-eyebrow">Winner Selected</div>
+        <h2 id="winner-modal-title">Winner!</h2>
+        <p id="winner-modal-name" class="modal-name">Ava</p>
+        <div class="modal-actions">
+          <button id="remove-winner-button" class="ghost-button modal-action" type="button">
+            Remove Winner (R)
+          </button>
+          <button id="spin-again-button" class="primary-button modal-action" type="button">
+            Spin Again
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="names-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-names="true"></div>
+      <div
+        class="modal-card names-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="names-modal-title"
+      >
+        <button id="close-names-button" class="modal-close" type="button" aria-label="Close names editor">
+          ×
+        </button>
+        <div class="modal-eyebrow">Entries</div>
+        <h2 id="names-modal-title">Add names to the wheel</h2>
+
+        <label class="label" for="name-input">Names</label>
+        <textarea id="name-input" spellcheck="false">Ava
+Noah
+Mia
+Lucas
+Sophia
+Ethan</textarea>
+
+        <div class="import-block">
+          <label class="label" for="file-input">Import CSV or Excel</label>
+          <input
+            id="file-input"
+            class="file-input"
+            type="file"
+            accept=".csv,.xlsx,.xls"
+          />
+          <p class="import-help">Imports names from the first column of the selected file.</p>
+        </div>
+
+        <div class="stats">
+          <div class="stat-card">
+            <span class="stat-label">Total Entries</span>
+            <strong id="entry-count">6</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Winner</span>
+            <strong id="winner-text">Waiting to spin</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="customize-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-customize="true"></div>
+      <div
+        class="modal-card customize-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="customize-modal-title"
+      >
+        <button
+          id="close-customize-button"
+          class="modal-close"
+          type="button"
+          aria-label="Close wheel customization"
+        >
+          ×
+        </button>
+        <div class="modal-eyebrow">Wheel Settings</div>
+        <h2 id="customize-modal-title">Customize the wheel</h2>
+
+        <div class="settings-grid">
+          <section class="settings-section">
+            <div class="settings-section-header">
+              <h3>Spin & Winner Popup</h3>
+              <p>Control how long the wheel spins and what appears in the winner reveal.</p>
+            </div>
+            <div class="settings-two-column">
+              <label class="setting-field" for="spin-duration-input">
+                <span class="setting-label">Spin time</span>
+                <div class="range-row">
+                  <input id="spin-duration-input" type="range" min="3" max="15" step="0.5" value="7" />
+                  <strong id="spin-duration-value">7.0s</strong>
+                </div>
+              </label>
+
+              <label class="setting-field" for="popup-header-input">
+                <span class="setting-label">Winner popup header</span>
+                <input
+                  id="popup-header-input"
+                  class="text-input"
+                  type="text"
+                  value="Winner!"
+                  maxlength="80"
+                />
+              </label>
+            </div>
+          </section>
+
+          <section class="settings-section">
+            <div class="settings-section-header">
+              <h3>Wheel Appearance</h3>
+              <p>Pick the theme, text styling, pointer styling, and any image inside the wheel.</p>
+            </div>
+            <div class="settings-two-column">
+              <label class="setting-field" for="text-color-input">
+                <span class="setting-label">Wheel text color</span>
+                <div class="color-setting-row">
+                  <input id="text-color-input" class="text-color-input" type="color" value="#fff9f0" />
+                  <strong id="text-color-value">#FFF9F0</strong>
+                </div>
+              </label>
+
+              <label class="setting-field" for="arrow-color-input">
+                <span class="setting-label">Arrow color</span>
+                <div class="color-setting-row">
+                  <input id="arrow-color-input" class="text-color-input" type="color" value="#8f2b18" />
+                  <strong id="arrow-color-value">#8F2B18</strong>
+                </div>
+              </label>
+            </div>
+
+            <label class="setting-field" for="arrow-position-input">
+              <span class="setting-label">Arrow position</span>
+              <div class="range-row">
+                <input id="arrow-position-input" type="range" min="1" max="12" step="1" value="12" />
+                <strong id="arrow-position-value">12 o'clock</strong>
+              </div>
+            </label>
+
+            <div class="setting-field">
+              <span class="setting-label">Color theme</span>
+              <div id="theme-options" class="theme-grid">
+                <button class="theme-option active" type="button" data-theme-index="0">
+                  <span class="theme-name">Harbor</span>
+                  <span class="theme-swatches">
+                    <span style="--swatch:#0e9594"></span>
+                    <span style="--swatch:#127475"></span>
+                    <span style="--swatch:#8b5e34"></span>
+                    <span style="--swatch:#b84f24"></span>
+                  </span>
+                </button>
+                <button class="theme-option" type="button" data-theme-index="1">
+                  <span class="theme-name">Cinema</span>
+                  <span class="theme-swatches">
+                    <span style="--swatch:#8f0f1c"></span>
+                    <span style="--swatch:#6b2d5c"></span>
+                    <span style="--swatch:#3f6791"></span>
+                    <span style="--swatch:#003049"></span>
+                  </span>
+                </button>
+                <button class="theme-option" type="button" data-theme-index="2">
+                  <span class="theme-name">Clay</span>
+                  <span class="theme-swatches">
+                    <span style="--swatch:#5b3a29"></span>
+                    <span style="--swatch:#7f5539"></span>
+                    <span style="--swatch:#9c6644"></span>
+                    <span style="--swatch:#6f4e37"></span>
+                  </span>
+                </button>
+                <button class="theme-option" type="button" data-theme-index="3">
+                  <span class="theme-name">Corporate</span>
+                  <span class="theme-swatches">
+                    <span style="--swatch:#08111f"></span>
+                    <span style="--swatch:#123456"></span>
+                    <span style="--swatch:#1e4f86"></span>
+                    <span style="--swatch:#6e8fb5"></span>
+                  </span>
+                </button>
+                <button class="theme-option" type="button" data-theme-index="4">
+                  <span class="theme-name">Neon Night</span>
+                  <span class="theme-swatches">
+                    <span style="--swatch:#2b2d42"></span>
+                    <span style="--swatch:#8d99ae"></span>
+                    <span style="--swatch:#ef233c"></span>
+                    <span style="--swatch:#f4a261"></span>
+                  </span>
+                </button>
+                <button class="theme-option" type="button" data-theme-index="5">
+                  <span class="theme-name">Canyon</span>
+                  <span class="theme-swatches">
+                    <span style="--swatch:#283618"></span>
+                    <span style="--swatch:#606c38"></span>
+                    <span style="--swatch:#9c6644"></span>
+                    <span style="--swatch:#3d5a80"></span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-field">
+              <span class="setting-label">Wheel background image</span>
+              <input
+                id="wheel-background-input"
+                class="file-input"
+                type="file"
+                accept="image/*"
+              />
+              <div class="image-actions">
+                <span id="background-image-status" class="image-status">No image selected</span>
+                <button id="clear-background-button" class="ghost-button small-button" type="button">
+                  Clear Image
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section">
+            <div class="settings-section-header">
+              <h3>Page Background</h3>
+              <p>Set a background color or upload a full-page image.</p>
+            </div>
+            <label class="setting-field" for="wheel-backdrop-color-input">
+              <span class="setting-label">Page background color</span>
+              <div class="color-setting-row">
+                <input
+                  id="wheel-backdrop-color-input"
+                  class="text-color-input"
+                  type="color"
+                  value="#fff6ee"
+                />
+                <strong id="wheel-backdrop-color-value">#FFF6EE</strong>
+              </div>
+            </label>
+
+            <div class="setting-field">
+              <span class="setting-label">Page background image</span>
+              <input
+                id="page-background-image-input"
+                class="file-input"
+                type="file"
+                accept="image/*"
+              />
+              <div class="image-actions">
+                <span id="page-background-image-status" class="image-status">No page background image selected</span>
+                <button id="clear-page-background-button" class="ghost-button small-button" type="button">
+                  Clear Page Image
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="settings-actions">
+          <input id="load-settings-input" type="file" accept=".json,application/json" hidden />
+          <button id="load-settings-button" class="ghost-button" type="button">Load Settings</button>
+          <button id="save-settings-button" class="primary-button" type="button">Save Settings</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+  </html>
