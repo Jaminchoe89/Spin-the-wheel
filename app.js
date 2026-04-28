@@ -432,26 +432,6 @@ function startIdleSpin() {
   idleAnimationId = requestAnimationFrame(tick);
 }
 
-function animateWheel(names) {
-  rotation += spinVelocity;
-  spinVelocity *= 0.985;
-
-  if (spinVelocity < 0.03) {
-    cancelAnimationFrame(spinAnimationId);
-    spinAnimationId = null;
-    spinVelocity = 0;
-    const winner = pickWinner(names);
-    winnerText.textContent = winner;
-    drawWheel(names);
-    stopIdleSpin();
-    openWinnerModal(winner);
-    return;
-  }
-
-  drawWheel(names);
-  spinAnimationId = requestAnimationFrame(() => animateWheel(names));
-}
-
 function startSpin() {
   const names = parseNames();
 
@@ -473,17 +453,20 @@ function startSpin() {
   const targetAngle = getPointerWorldAngle() - (targetIndex * arc + arc / 2);
   const currentNormalized = normalizeAngle(rotation);
   const extraRotation = rounds * Math.PI * 2 + normalizeAngle(targetAngle - currentNormalized);
-  const durationFrames = Math.max(120, Math.round(wheelSettings.spinDurationSeconds * 60));
-  let frame = 0;
+  const durationMs = Math.max(3000, wheelSettings.spinDurationSeconds * 1000);
   const startRotation = rotation;
+  let startTime = null;
 
   function easeOutQuint(t) {
     return 1 - Math.pow(1 - t, 5);
   }
 
-  function scriptedSpin() {
-    frame += 1;
-    const progress = frame / durationFrames;
+  function scriptedSpin(timestamp) {
+    if (startTime === null) {
+      startTime = timestamp;
+    }
+
+    const progress = Math.min((timestamp - startTime) / durationMs, 1);
     const eased = easeOutQuint(Math.min(progress, 1));
     const newRotation = startRotation + extraRotation * eased;
     spinVelocity = newRotation - rotation;
@@ -496,10 +479,16 @@ function startSpin() {
       return;
     }
 
-    spinAnimationId = requestAnimationFrame(() => animateWheel(names));
+    spinAnimationId = null;
+    spinVelocity = 0;
+    const winner = pickWinner(names);
+    winnerText.textContent = winner;
+    drawWheel(names);
+    stopIdleSpin();
+    openWinnerModal(winner);
   }
 
-  scriptedSpin();
+  spinAnimationId = requestAnimationFrame(scriptedSpin);
 }
 
 function syncThemeSelection() {
