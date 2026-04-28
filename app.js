@@ -129,15 +129,36 @@ function openWinnerModal(name) {
   winnerModalName.textContent = name;
   winnerModal.classList.remove("hidden");
   winnerModal.setAttribute("aria-hidden", "false");
+  fitWinnerModalName();
   closeModalButton.focus();
 }
 
 function closeWinnerModal() {
   winnerModal.classList.add("hidden");
   winnerModal.setAttribute("aria-hidden", "true");
+  winnerModalName.style.fontSize = "";
   startIdleSpin();
   if (lastFocusedElement instanceof HTMLElement) {
     lastFocusedElement.focus();
+  }
+}
+
+function fitWinnerModalName() {
+  const maxWidth = winnerModalName.parentElement?.clientWidth
+    ? winnerModalName.parentElement.clientWidth - 64
+    : 0;
+
+  if (!maxWidth) {
+    return;
+  }
+
+  let fontSize = 76;
+  const minFontSize = 26;
+  winnerModalName.style.fontSize = `${fontSize}px`;
+
+  while (fontSize > minFontSize && winnerModalName.scrollWidth > maxWidth) {
+    fontSize -= 2;
+    winnerModalName.style.fontSize = `${fontSize}px`;
   }
 }
 
@@ -309,7 +330,7 @@ function drawWheel(names) {
     ctx.strokeStyle = "rgba(225, 164, 79, 0.72)";
     ctx.stroke();
     ctx.fillStyle = "#6e6157";
-    ctx.font = "700 46px Manrope";
+    ctx.font = "700 46px Roboto Flex";
     ctx.textAlign = "center";
     ctx.fillText("Add names to begin", 0, 16);
     ctx.restore();
@@ -350,7 +371,7 @@ function drawWheel(names) {
     }
 
     const fontSize = fitTextFontSize(name, 38, 12, maxTextWidth);
-    ctx.font = `700 ${fontSize}px Manrope`;
+    ctx.font = `700 ${fontSize}px Roboto Flex`;
     ctx.fillText(name, 0, fontSize * 0.32);
     ctx.restore();
   });
@@ -362,7 +383,7 @@ function fitTextFontSize(text, baseFontSize, minFontSize, maxWidth) {
   let fontSize = baseFontSize;
 
   while (fontSize > minFontSize) {
-    ctx.font = `700 ${fontSize}px Manrope`;
+    ctx.font = `700 ${fontSize}px Roboto Flex`;
     if (ctx.measureText(text).width <= maxWidth) {
       return fontSize;
     }
@@ -812,7 +833,12 @@ loadSettingsButton.addEventListener("click", () => loadSettingsInput.click());
 loadSettingsInput.addEventListener("change", handleLoadSettings);
 saveSettingsButton.addEventListener("click", saveSettingsToFile);
 themeToggleInput.addEventListener("change", toggleTheme);
-window.addEventListener("resize", updatePointerPosition);
+window.addEventListener("resize", () => {
+  updatePointerPosition();
+  if (!winnerModal.classList.contains("hidden")) {
+    fitWinnerModalName();
+  }
+});
 document.addEventListener("keydown", (event) => {
   if (isEditableTarget(event.target)) {
     return;
