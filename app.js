@@ -129,36 +129,15 @@ function openWinnerModal(name) {
   winnerModalName.textContent = name;
   winnerModal.classList.remove("hidden");
   winnerModal.setAttribute("aria-hidden", "false");
-  fitWinnerModalName();
   closeModalButton.focus();
 }
 
 function closeWinnerModal() {
   winnerModal.classList.add("hidden");
   winnerModal.setAttribute("aria-hidden", "true");
-  winnerModalName.style.fontSize = "";
   startIdleSpin();
   if (lastFocusedElement instanceof HTMLElement) {
     lastFocusedElement.focus();
-  }
-}
-
-function fitWinnerModalName() {
-  const maxWidth = winnerModalName.parentElement?.clientWidth
-    ? winnerModalName.parentElement.clientWidth - 64
-    : 0;
-
-  if (!maxWidth) {
-    return;
-  }
-
-  let fontSize = 76;
-  const minFontSize = 26;
-  winnerModalName.style.fontSize = `${fontSize}px`;
-
-  while (fontSize > minFontSize && winnerModalName.scrollWidth > maxWidth) {
-    fontSize -= 2;
-    winnerModalName.style.fontSize = `${fontSize}px`;
   }
 }
 
@@ -822,12 +801,7 @@ loadSettingsButton.addEventListener("click", () => loadSettingsInput.click());
 loadSettingsInput.addEventListener("change", handleLoadSettings);
 saveSettingsButton.addEventListener("click", saveSettingsToFile);
 themeToggleInput.addEventListener("change", toggleTheme);
-window.addEventListener("resize", () => {
-  updatePointerPosition();
-  if (!winnerModal.classList.contains("hidden")) {
-    fitWinnerModalName();
-  }
-});
+window.addEventListener("resize", updatePointerPosition);
 document.addEventListener("keydown", (event) => {
   if (isEditableTarget(event.target)) {
     return;
