@@ -326,6 +326,11 @@ function drawWheel(names) {
   names.forEach((name, index) => {
     const startAngle = index * arc;
     const endAngle = startAngle + arc;
+    const textRadius = radius - 60;
+    const maxTextWidth = Math.min(
+      radius * 0.58,
+      Math.max(80, 2 * Math.sin(arc / 2) * (textRadius - 32))
+    );
 
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -338,26 +343,33 @@ function drawWheel(names) {
     ctx.rotate(startAngle + arc / 2);
     ctx.textAlign = "right";
     ctx.fillStyle = wheelSettings.textColor;
-    ctx.font = "700 38px Manrope";
-    ctx.translate(radius - 60, 0);
+    ctx.translate(textRadius, 0);
     if (wheelBackgroundImage) {
       ctx.shadowColor = "rgba(31, 26, 22, 0.45)";
       ctx.shadowBlur = 10;
     }
 
-    const fitted = fitText(name, 18);
-    ctx.fillText(fitted, 0, 12);
+    const fontSize = fitTextFontSize(name, 38, 12, maxTextWidth);
+    ctx.font = `700 ${fontSize}px Manrope`;
+    ctx.fillText(name, 0, fontSize * 0.32);
     ctx.restore();
   });
 
   ctx.restore();
 }
 
-function fitText(text, maxLength) {
-  if (text.length <= maxLength) {
-    return text;
+function fitTextFontSize(text, baseFontSize, minFontSize, maxWidth) {
+  let fontSize = baseFontSize;
+
+  while (fontSize > minFontSize) {
+    ctx.font = `700 ${fontSize}px Manrope`;
+    if (ctx.measureText(text).width <= maxWidth) {
+      return fontSize;
+    }
+    fontSize -= 1;
   }
-  return `${text.slice(0, maxLength - 1)}…`;
+
+  return minFontSize;
 }
 
 function pickWinner(names) {
