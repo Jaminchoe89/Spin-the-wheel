@@ -210,6 +210,16 @@ textarea:focus {
   font-size: 0.92rem;
   color: var(--muted);
 }
+.sync-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.sync-row .text-input {
+  flex: 1;
+  min-width: 0;
+}
 
 button {
   appearance: none;

@@ -1,0 +1,8 @@
+node_modules/
+.env*
+.DS_Store
+.railway/
+# Keep client name lists out of the repo
+*.xlsx
+*.xls
+*.csv

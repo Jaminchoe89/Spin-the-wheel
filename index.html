@@ -101,6 +101,22 @@ Ethan</textarea>
           />
           <p class="import-help">Imports names from the first column of the selected file.</p>
         </div>
+        <div class="import-block">
+          <label class="label" for="sheet-url-input">Live sync from a shared sheet</label>
+          <div class="sync-row">
+            <input
+              id="sheet-url-input"
+              class="text-input"
+              type="url"
+              placeholder="Paste a Google Sheets or OneDrive/SharePoint link"
+              spellcheck="false"
+            />
+            <button id="sheet-sync-button" class="primary-button small-button" type="button">Sync</button>
+          </div>
+          <p id="sheet-sync-status" class="import-help">
+            Share the sheet as "Anyone with the link". Names in the first column update every few seconds.
+          </p>
+        </div>
 
         <div class="stats">
           <div class="stat-card">

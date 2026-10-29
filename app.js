@@ -45,6 +45,18 @@ const saveSettingsButton = document.getElementById("save-settings-button");
 const themeToggleInput = document.getElementById("theme-toggle-input");
 const themeToggleLabel = document.getElementById("theme-toggle-label");
 const themeToggle = document.querySelector(".theme-toggle");
+const sheetUrlInput = document.getElementById("sheet-url-input");
+const sheetSyncButton = document.getElementById("sheet-sync-button");
+const sheetSyncStatus = document.getElementById("sheet-sync-status");
+
+const sheetPollIntervalMs = 5000;
+const sheetUrlStorageKey = "spin-the-wheel-sheet-url";
+const sheetSyncHelpText = sheetSyncStatus.textContent.trim();
+let sheetUrl = "";
+let sheetPollTimer = null;
+let sheetFetchInFlight = false;
+// Winners removed during a synced session, so the next poll doesn't re-add them.
+let removedSheetNames = [];
 
 let rotation = 0;
 let spinVelocity = 0;
@@ -105,7 +117,7 @@ function normalizeImportedNames(rows) {
     .map((value) => String(value ?? "").trim())
     .filter(Boolean);
 
-  if (values.length > 0 && /^(name|names)$/i.test(values[0])) {
+  if (values.length > 0 && /\bnames?\b/i.test(values[0])) {
     values.shift();
   }
 
@@ -185,6 +197,9 @@ function removeWinnerFromList() {
   }
 
   names.splice(winnerIndex, 1);
+  if (sheetUrl) {
+    removedSheetNames.push(lastWinner);
+  }
   updateNames(names);
   lastWinner = "";
   closeWinnerModal();
@@ -239,6 +254,125 @@ function handleFileImport(event) {
   }
 
   winnerText.textContent = "Unsupported file type";
+}
+
+function excludeRemovedSheetNames(names) {
+  const remaining = [...names];
+  removedSheetNames.forEach((removedName) => {
+    const index = remaining.indexOf(removedName);
+    if (index !== -1) {
+      remaining.splice(index, 1);
+    }
+  });
+  return remaining;
+}
+
+function setSheetSyncStatus(message) {
+  sheetSyncStatus.textContent = message;
+}
+
+async function pollSheet() {
+  if (!sheetUrl || sheetFetchInFlight || !window.XLSX) {
+    return;
+  }
+
+  // Never swap names mid-spin; the next poll will pick up any changes.
+  if (spinAnimationId) {
+    return;
+  }
+
+  sheetFetchInFlight = true;
+  const requestedUrl = sheetUrl;
+
+  try {
+    const response = await fetch(`/api/sheet?url=${encodeURIComponent(requestedUrl)}`, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
+
+    const isCsv = (response.headers.get("content-type") || "").includes("csv");
+    const data = new Uint8Array(await response.arrayBuffer());
+    if (requestedUrl !== sheetUrl || spinAnimationId) {
+      return;
+    }
+
+    // Decode CSV as UTF-8 ourselves so non-Latin names (e.g. Thai) survive.
+    const workbook = isCsv
+      ? window.XLSX.read(new TextDecoder("utf-8").decode(data), { type: "string" })
+      : window.XLSX.read(data, { type: "array" });
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = window.XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false });
+    const names = excludeRemovedSheetNames(normalizeImportedNames(rows));
+
+    if (names.join("\n") !== parseNames().join("\n")) {
+      updateNames(names);
+    }
+
+    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    setSheetSyncStatus(`Live: ${names.length} names, last checked ${time}.`);
+  } catch (error) {
+    if (requestedUrl === sheetUrl) {
+      setSheetSyncStatus(error.message || "Couldn't reach the sheet. Retrying…");
+    }
+  } finally {
+    sheetFetchInFlight = false;
+  }
+}
+
+function startSheetSync(url) {
+  stopSheetSync();
+  sheetUrl = url;
+  removedSheetNames = [];
+  sheetUrlInput.value = url;
+  input.readOnly = true;
+  sheetSyncButton.textContent = "Stop";
+  setSheetSyncStatus("Connecting to sheet…");
+  try {
+    localStorage.setItem(sheetUrlStorageKey, url);
+  } catch {}
+  pollSheet();
+  sheetPollTimer = setInterval(pollSheet, sheetPollIntervalMs);
+}
+
+function stopSheetSync() {
+  clearInterval(sheetPollTimer);
+  sheetPollTimer = null;
+  sheetUrl = "";
+  input.readOnly = false;
+  sheetSyncButton.textContent = "Sync";
+  setSheetSyncStatus(sheetSyncHelpText);
+}
+
+function handleSheetSyncButton() {
+  if (sheetUrl) {
+    stopSheetSync();
+    try {
+      localStorage.removeItem(sheetUrlStorageKey);
+    } catch {}
+    return;
+  }
+
+  const url = sheetUrlInput.value.trim();
+  if (!url) {
+    setSheetSyncStatus("Paste a shared sheet link first.");
+    return;
+  }
+
+  startSheetSync(url);
+}
+
+function restoreSheetSync() {
+  const params = new URLSearchParams(window.location.search);
+  let savedUrl = params.get("sheet") || "";
+  if (!savedUrl) {
+    try {
+      savedUrl = localStorage.getItem(sheetUrlStorageKey) || "";
+    } catch {}
+  }
+
+  if (savedUrl) {
+    startSheetSync(savedUrl);
+  }
 }
 
 function getSegmentFillStyle(index) {
@@ -801,6 +935,13 @@ loadSettingsButton.addEventListener("click", () => loadSettingsInput.click());
 loadSettingsInput.addEventListener("change", handleLoadSettings);
 saveSettingsButton.addEventListener("click", saveSettingsToFile);
 themeToggleInput.addEventListener("change", toggleTheme);
+sheetSyncButton.addEventListener("click", handleSheetSyncButton);
+sheetUrlInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    handleSheetSyncButton();
+  }
+});
 window.addEventListener("resize", updatePointerPosition);
 document.addEventListener("keydown", (event) => {
   if (isEditableTarget(event.target)) {
@@ -860,4 +1001,5 @@ syncWheelBackdropColorUI();
 syncPageBackgroundImageUI();
 syncThemeSelection();
 drawWheel(parseNames());
+restoreSheetSync();
 startIdleSpin();
