@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,400;8..144,500;8..144,600;8..144,700;8..144,800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="landing">
@@ -32,6 +32,7 @@
       </section>
 
       <div class="landing-actions">
+        <a href="/" class="ghost-button events-link">Events</a>
         <button id="add-names-button" class="primary-button">Add Names</button>
         <button id="customize-button" class="ghost-button">Customise</button>
         <label class="theme-toggle" for="theme-toggle-input">
@@ -41,6 +42,7 @@
           </span>
           <span id="theme-toggle-label">☾</span>
         </label>
+        <span id="save-status" class="save-status hidden" role="status"></span>
       </div>
     </main>
 
@@ -331,6 +333,6 @@ Ethan</textarea>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="app.js"></script>
+    <script src="/app.js"></script>
   </body>
   </html>

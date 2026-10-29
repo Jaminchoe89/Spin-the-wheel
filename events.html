@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Events · Spin the Wheel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,400;8..144,500;8..144,600;8..144,700;8..144,800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="events-page">
+    <main class="events-shell">
+      <header class="events-header">
+        <h1>Events</h1>
+        <p>Each event gets its own wheel, names and look. Run as many as you like at the same time.</p>
+      </header>
+
+      <section class="events-panel" aria-labelledby="create-title">
+        <h2 id="create-title">New event</h2>
+        <form id="create-form" novalidate>
+          <div class="create-grid">
+            <label class="field" for="event-name-input">
+              Event name
+              <input id="event-name-input" class="text-input" type="text" maxlength="120" placeholder="DBS Gala Dinner 2026" required />
+            </label>
+
+            <label class="field" for="event-slug-input">
+              Wheel address
+              <div class="slug-row">
+                <span id="slug-prefix">wheel.compass.sg/</span>
+                <input id="event-slug-input" class="text-input" type="text" maxlength="60" placeholder="dbs-gala-2026" spellcheck="false" />
+              </div>
+            </label>
+
+            <label class="field wide" for="event-sheet-input">
+              Shared sheet link <span class="hint">(optional – you can add it on the wheel later)</span>
+              <input id="event-sheet-input" class="text-input" type="url" placeholder="Paste a Google Sheets or OneDrive/SharePoint link" spellcheck="false" />
+            </label>
+
+            <label class="field wide" for="copy-from-select">
+              Copy look from <span class="hint">(colours, images, popup text)</span>
+              <select id="copy-from-select" class="text-input">
+                <option value="">Default look</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="create-actions">
+            <button class="primary-button" type="submit">Create wheel</button>
+            <p id="form-error" class="form-error" role="alert"></p>
+          </div>
+        </form>
+      </section>
+
+      <section class="events-panel" aria-labelledby="list-title">
+        <h2 id="list-title">All events</h2>
+        <ul id="event-list" class="event-list"></ul>
+        <p id="empty-state" class="empty-state">No events yet. Create one above.</p>
+      </section>
+    </main>
+
+    <script src="/events.js"></script>
+  </body>
+</html>

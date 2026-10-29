@@ -1,9 +1,15 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const root = __dirname;
 const port = process.env.PORT || 3000;
+// Railway mounts a volume here in production; locally events live in ./data.
+const dataDir = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(root, "data");
+const eventsDir = path.join(dataDir, "events");
+const sitePassword = process.env.WHEEL_PASSWORD || "";
+const maxBodyBytes = 25 * 1024 * 1024;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -12,6 +18,11 @@ const mimeTypes = {
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml; charset=utf-8",
 };
+
+// Only these files are served; everything else (server code, data) stays private.
+const publicFiles = new Set(["index.html", "events.html", "styles.css", "app.js", "events.js"]);
+const slugPattern = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
+const reservedSlugs = new Set(["api", "events"]);
 
 // Only these hosts may be fetched through the sheet proxy.
 const allowedSheetHosts = [
@@ -92,34 +103,267 @@ async function handleSheetRequest(req, res) {
   }
 }
 
-const server = http.createServer((req, res) => {
-  if (req.url.startsWith("/api/sheet")) {
-    handleSheetRequest(req, res);
-    return;
+// ---- Event storage: one JSON file per event ----
+
+function eventFilePath(slug) {
+  return path.join(eventsDir, `${slug}.json`);
+}
+
+function readEvent(slug) {
+  if (!slugPattern.test(slug)) {
+    return null;
+  }
+  try {
+    return JSON.parse(fs.readFileSync(eventFilePath(slug), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeEvent(event) {
+  fs.mkdirSync(eventsDir, { recursive: true });
+  const target = eventFilePath(event.slug);
+  const temp = `${target}.${process.pid}.tmp`;
+  fs.writeFileSync(temp, JSON.stringify(event));
+  fs.renameSync(temp, target);
+}
+
+function listEvents() {
+  let files = [];
+  try {
+    files = fs.readdirSync(eventsDir).filter((file) => file.endsWith(".json"));
+  } catch {
+    return [];
   }
 
-  const pathname = decodeURIComponent(req.url.split("?")[0]);
-  const urlPath = pathname === "/" ? "/index.html" : pathname;
-  const safePath = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, "").replace(/^[/\\]+/, "");
-  const filePath = path.join(root, safePath);
+  return files
+    .map((file) => readEvent(file.slice(0, -5)))
+    .filter(Boolean)
+    .map(({ slug, name, sheetUrl, names, removedNames, createdAt, updatedAt }) => ({
+      slug,
+      name,
+      sheetUrl,
+      nameCount: names.length,
+      removedCount: removedNames.length,
+      createdAt,
+      updatedAt,
+    }))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
 
-  if (!filePath.startsWith(root)) {
-    res.writeHead(403);
-    res.end("Forbidden");
-    return;
+function slugify(text) {
+  return String(text)
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    .replace(/-+$/, "");
+}
+
+// Copies only the fields a client may change, with basic type checks.
+function applyEventChanges(event, changes) {
+  if (typeof changes.name === "string" && changes.name.trim()) {
+    event.name = changes.name.trim().slice(0, 120);
   }
+  if (typeof changes.sheetUrl === "string") {
+    event.sheetUrl = changes.sheetUrl.trim();
+  }
+  if (Array.isArray(changes.names)) {
+    event.names = changes.names.map(String);
+  }
+  if (Array.isArray(changes.removedNames)) {
+    event.removedNames = changes.removedNames.map(String);
+  }
+  if (changes.settings && typeof changes.settings === "object") {
+    event.settings = changes.settings;
+  }
+  event.updatedAt = new Date().toISOString();
+  return event;
+}
 
-  fs.readFile(filePath, (err, data) => {
+// ---- HTTP helpers ----
+
+function sendJson(res, status, body) {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+  res.end(JSON.stringify(body));
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > maxBodyBytes) {
+        reject(new Error("Request too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
+      } catch {
+        reject(new Error("Invalid JSON"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function isAuthorized(req) {
+  if (!sitePassword) {
+    return true;
+  }
+  const match = (req.headers.authorization || "").match(/^Basic (.+)$/);
+  if (!match) {
+    return false;
+  }
+  const password = Buffer.from(match[1], "base64").toString("utf8").split(":").slice(1).join(":");
+  const expected = crypto.createHash("sha256").update(sitePassword).digest();
+  const actual = crypto.createHash("sha256").update(password).digest();
+  return crypto.timingSafeEqual(expected, actual);
+}
+
+function serveFile(res, fileName) {
+  fs.readFile(path.join(root, fileName), (err, data) => {
     if (err) {
-      res.writeHead(err.code === "ENOENT" ? 404 : 500);
-      res.end(err.code === "ENOENT" ? "Not found" : "Server error");
+      res.writeHead(500);
+      res.end("Server error");
+      return;
+    }
+    res.writeHead(200, { "Content-Type": mimeTypes[path.extname(fileName)] || "application/octet-stream" });
+    res.end(data);
+  });
+}
+
+async function handleEventsApi(req, res, pathname) {
+  const slug = pathname.split("/")[3] ? decodeURIComponent(pathname.split("/")[3]) : "";
+
+  if (!slug) {
+    if (req.method === "GET") {
+      sendJson(res, 200, listEvents());
       return;
     }
 
-    const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { "Content-Type": mimeTypes[ext] || "application/octet-stream" });
-    res.end(data);
-  });
+    if (req.method === "POST") {
+      const body = await readJsonBody(req);
+      const name = String(body.name || "").trim();
+      const newSlug = slugify(body.slug || name);
+      if (!name || !slugPattern.test(newSlug)) {
+        sendJson(res, 400, { error: "Give the event a name, and an address using letters or numbers." });
+        return;
+      }
+      if (reservedSlugs.has(newSlug)) {
+        sendJson(res, 400, { error: `/${newSlug} is reserved. Pick another address.` });
+        return;
+      }
+      if (readEvent(newSlug)) {
+        sendJson(res, 409, { error: `An event at /${newSlug} already exists.` });
+        return;
+      }
+
+      const template = body.copyFrom ? readEvent(String(body.copyFrom)) : null;
+      const now = new Date().toISOString();
+      const event = {
+        slug: newSlug,
+        name: name.slice(0, 120),
+        sheetUrl: String(body.sheetUrl || "").trim(),
+        names: [],
+        removedNames: [],
+        settings: template ? template.settings : null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      writeEvent(event);
+      sendJson(res, 201, event);
+      return;
+    }
+
+    sendJson(res, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const event = readEvent(slug);
+  if (!event) {
+    sendJson(res, 404, { error: "Event not found" });
+    return;
+  }
+
+  if (req.method === "GET") {
+    sendJson(res, 200, event);
+    return;
+  }
+
+  if (req.method === "PUT") {
+    const changes = await readJsonBody(req);
+    writeEvent(applyEventChanges(event, changes));
+    sendJson(res, 200, { updatedAt: event.updatedAt });
+    return;
+  }
+
+  if (req.method === "DELETE") {
+    fs.unlinkSync(eventFilePath(slug));
+    sendJson(res, 200, { deleted: slug });
+    return;
+  }
+
+  sendJson(res, 405, { error: "Method not allowed" });
+}
+
+const server = http.createServer(async (req, res) => {
+  if (!isAuthorized(req)) {
+    res.writeHead(401, { "WWW-Authenticate": 'Basic realm="Spin the Wheel"' });
+    res.end("Password required");
+    return;
+  }
+
+  let pathname;
+  try {
+    pathname = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
+  } catch {
+    res.writeHead(400);
+    res.end("Bad request");
+    return;
+  }
+
+  try {
+    if (pathname === "/api/sheet") {
+      await handleSheetRequest(req, res);
+      return;
+    }
+
+    if (pathname === "/api/events" || pathname.startsWith("/api/events/")) {
+      await handleEventsApi(req, res, pathname);
+      return;
+    }
+  } catch (error) {
+    sendJson(res, 400, { error: error.message || "Bad request" });
+    return;
+  }
+
+  if (pathname === "/") {
+    serveFile(res, "events.html");
+    return;
+  }
+
+  const fileName = pathname.slice(1);
+  if (publicFiles.has(fileName)) {
+    serveFile(res, fileName);
+    return;
+  }
+
+  // /<event-slug> opens that event's wheel.
+  const slug = fileName.replace(/\/$/, "").toLowerCase();
+  if (readEvent(slug)) {
+    serveFile(res, "index.html");
+    return;
+  }
+
+  res.writeHead(302, { Location: "/" });
+  res.end();
 });
 
 server.listen(port, () => {

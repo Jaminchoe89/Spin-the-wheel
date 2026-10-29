@@ -49,14 +49,22 @@ const sheetUrlInput = document.getElementById("sheet-url-input");
 const sheetSyncButton = document.getElementById("sheet-sync-button");
 const sheetSyncStatus = document.getElementById("sheet-sync-status");
 
+const saveStatus = document.getElementById("save-status");
+
 const sheetPollIntervalMs = 5000;
-const sheetUrlStorageKey = "spin-the-wheel-sheet-url";
 const sheetSyncHelpText = sheetSyncStatus.textContent.trim();
 let sheetUrl = "";
 let sheetPollTimer = null;
 let sheetFetchInFlight = false;
 // Winners removed during a synced session, so the next poll doesn't re-add them.
 let removedSheetNames = [];
+
+// Each wheel belongs to an event at /<slug>; its state is saved on the server.
+const eventSlug = decodeURIComponent(window.location.pathname.split("/")[1] || "").toLowerCase();
+const eventApiUrl = `/api/events/${encodeURIComponent(eventSlug)}`;
+const saveDelayMs = 600;
+let eventReady = false;
+let saveTimer = null;
 
 let rotation = 0;
 let spinVelocity = 0;
@@ -132,6 +140,7 @@ function updateNames(names) {
   if (!spinAnimationId) {
     drawWheel(names);
   }
+  scheduleSave();
 }
 
 function openWinnerModal(name) {
@@ -319,17 +328,15 @@ async function pollSheet() {
   }
 }
 
-function startSheetSync(url) {
+function startSheetSync(url, removedNames = []) {
   stopSheetSync();
   sheetUrl = url;
-  removedSheetNames = [];
+  removedSheetNames = [...removedNames];
   sheetUrlInput.value = url;
   input.readOnly = true;
   sheetSyncButton.textContent = "Stop";
   setSheetSyncStatus("Connecting to sheet…");
-  try {
-    localStorage.setItem(sheetUrlStorageKey, url);
-  } catch {}
+  scheduleSave();
   pollSheet();
   sheetPollTimer = setInterval(pollSheet, sheetPollIntervalMs);
 }
@@ -338,6 +345,7 @@ function stopSheetSync() {
   clearInterval(sheetPollTimer);
   sheetPollTimer = null;
   sheetUrl = "";
+  removedSheetNames = [];
   input.readOnly = false;
   sheetSyncButton.textContent = "Sync";
   setSheetSyncStatus(sheetSyncHelpText);
@@ -346,9 +354,7 @@ function stopSheetSync() {
 function handleSheetSyncButton() {
   if (sheetUrl) {
     stopSheetSync();
-    try {
-      localStorage.removeItem(sheetUrlStorageKey);
-    } catch {}
+    scheduleSave();
     return;
   }
 
@@ -361,17 +367,72 @@ function handleSheetSyncButton() {
   startSheetSync(url);
 }
 
-function restoreSheetSync() {
-  const params = new URLSearchParams(window.location.search);
-  let savedUrl = params.get("sheet") || "";
-  if (!savedUrl) {
-    try {
-      savedUrl = localStorage.getItem(sheetUrlStorageKey) || "";
-    } catch {}
-  }
+function getSettingsSnapshot() {
+  return {
+    ...wheelSettings,
+    palette: [...palette],
+    selectedThemeIndex: getSelectedThemeIndex(),
+    wheelBackgroundImage: wheelBackgroundImageDataUrl,
+    pageBackgroundImage: pageBackgroundImageDataUrl,
+  };
+}
 
-  if (savedUrl) {
-    startSheetSync(savedUrl);
+function setSaveStatus(message) {
+  saveStatus.textContent = message;
+  saveStatus.classList.toggle("hidden", !message);
+}
+
+function scheduleSave() {
+  if (!eventReady) {
+    return;
+  }
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveEvent, saveDelayMs);
+}
+
+async function saveEvent() {
+  saveTimer = null;
+  try {
+    const response = await fetch(eventApiUrl, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        names: parseNames(),
+        removedNames: removedSheetNames,
+        sheetUrl,
+        settings: getSettingsSnapshot(),
+      }),
+    });
+    if (!response.ok) {
+      throw new Error();
+    }
+    setSaveStatus("");
+  } catch {
+    setSaveStatus("Not saved – retrying");
+    scheduleSave();
+  }
+}
+
+async function loadEvent() {
+  try {
+    const response = await fetch(eventApiUrl, { cache: "no-store" });
+    if (!response.ok) {
+      window.location.href = "/";
+      return;
+    }
+
+    const event = await response.json();
+    document.title = `${event.name} · Spin the Wheel`;
+    if (event.settings) {
+      applyLoadedSettings(event.settings);
+    }
+    updateNames(event.names || []);
+    if (event.sheetUrl) {
+      startSheetSync(event.sheetUrl, event.removedNames || []);
+    }
+    eventReady = true;
+  } catch {
+    setSaveStatus("Couldn't load this event – refresh to retry");
   }
 }
 
@@ -674,6 +735,7 @@ function applyPageBackgroundImageDataUrl(dataUrl) {
   pageBackgroundImageDataUrl = dataUrl;
   syncPageBackgroundImageUI();
   updateThemeToggleVisibility();
+  scheduleSave();
 }
 
 function handlePageBackgroundImageUpload(event) {
@@ -737,6 +799,7 @@ function setBackgroundImage(file) {
       wheelBackgroundImage = image;
       backgroundImageStatus.textContent = file.name;
       drawWheel(parseNames());
+      scheduleSave();
     };
     image.src = wheelBackgroundImageDataUrl;
   };
@@ -767,13 +830,7 @@ function getSelectedThemeIndex() {
 function saveSettingsToFile() {
   const payload = {
     exportedAt: new Date().toISOString(),
-    settings: {
-      ...wheelSettings,
-      palette: [...palette],
-      selectedThemeIndex: getSelectedThemeIndex(),
-      wheelBackgroundImage: wheelBackgroundImageDataUrl,
-      pageBackgroundImage: pageBackgroundImageDataUrl,
-    },
+    settings: getSettingsSnapshot(),
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -850,6 +907,7 @@ function handleLoadSettings(event) {
       const parsed = JSON.parse(String(reader.result ?? "{}"));
       const settings = parsed && typeof parsed === "object" && "settings" in parsed ? parsed.settings : parsed;
       applyLoadedSettings(settings || {});
+      scheduleSave();
     } catch {
       winnerText.textContent = "Invalid settings file";
     } finally {
@@ -880,7 +938,10 @@ input.addEventListener("input", () => {
   } else if (!spinAnimationId) {
     drawWheel([]);
   }
+  scheduleSave();
 });
+// Any change in the Customise panel is saved to the event.
+["input", "change", "click"].forEach((type) => customizeModal.addEventListener(type, scheduleSave));
 
 fileInput.addEventListener("change", handleFileImport);
 addNamesButton.addEventListener("click", openNamesModal);
@@ -935,6 +996,7 @@ loadSettingsButton.addEventListener("click", () => loadSettingsInput.click());
 loadSettingsInput.addEventListener("change", handleLoadSettings);
 saveSettingsButton.addEventListener("click", saveSettingsToFile);
 themeToggleInput.addEventListener("change", toggleTheme);
+themeToggleInput.addEventListener("change", scheduleSave);
 sheetSyncButton.addEventListener("click", handleSheetSyncButton);
 sheetUrlInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
@@ -1001,5 +1063,5 @@ syncWheelBackdropColorUI();
 syncPageBackgroundImageUI();
 syncThemeSelection();
 drawWheel(parseNames());
-restoreSheetSync();
+loadEvent();
 startIdleSpin();
