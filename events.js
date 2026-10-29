@@ -31,6 +31,9 @@ function describeEvent(event) {
   if (event.removedCount > 0) {
     parts.push(`${event.removedCount} winners removed`);
   }
+  if (event.awardCount > 0) {
+    parts.push(`${event.awardCount} prizes drawn`);
+  }
   parts.push(`updated ${new Date(event.updatedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`);
   return parts.join(" · ");
 }

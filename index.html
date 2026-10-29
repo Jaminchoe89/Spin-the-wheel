@@ -31,9 +31,20 @@
         </div>
       </section>
 
+      <div id="prize-banner" class="prize-banner hidden" aria-live="polite">
+        <button id="prev-prize-button" class="prize-step" type="button" aria-label="Previous prize">‹</button>
+        <div class="prize-banner-text">
+          <span class="prize-banner-label">Now spinning for</span>
+          <strong id="prize-banner-name"></strong>
+          <span id="prize-banner-count" class="prize-banner-count"></span>
+        </div>
+        <button id="next-prize-button" class="prize-step" type="button" aria-label="Next prize">›</button>
+      </div>
+
       <div class="landing-actions">
         <a href="/" class="ghost-button events-link">Events</a>
         <button id="add-names-button" class="primary-button">Add Names</button>
+        <button id="prizes-button" class="ghost-button">Prizes</button>
         <button id="customize-button" class="ghost-button">Customise</button>
         <label class="theme-toggle" for="theme-toggle-input">
           <input id="theme-toggle-input" type="checkbox" />
@@ -60,7 +71,11 @@
         </button>
         <h2 id="winner-modal-title">Winner!</h2>
         <p id="winner-modal-name" class="modal-name">Ava</p>
+        <p id="winner-modal-prize" class="modal-prize hidden"></p>
         <div class="modal-actions">
+          <button id="void-draw-button" class="ghost-button modal-action hidden" type="button">
+            Void Draw
+          </button>
           <button id="remove-winner-button" class="ghost-button modal-action" type="button">
             Remove Winner (R)
           </button>
@@ -129,6 +144,40 @@ Ethan</textarea>
             <span class="stat-label">Winner</span>
             <strong id="winner-text">Waiting to spin</strong>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="prizes-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-prizes="true"></div>
+      <div
+        class="modal-card names-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="prizes-modal-title"
+      >
+        <button id="close-prizes-button" class="modal-close" type="button" aria-label="Close prizes">
+          ×
+        </button>
+        <div class="modal-eyebrow">Prizes</div>
+        <h2 id="prizes-modal-title">What are we spinning for?</h2>
+
+        <label class="label" for="prizes-input">Prizes, in draw order</label>
+        <textarea id="prizes-input" class="prizes-input" spellcheck="false" placeholder="Lucky draw voucher x5&#10;Dyson Airwrap x2&#10;iPhone 17 Pro"></textarea>
+        <p class="import-help">One prize per line. Add “x3” to draw it three times. Leave empty to spin without prizes.</p>
+
+        <ul id="prize-list" class="prize-list"></ul>
+
+        <div class="winners-log">
+          <div class="winners-log-header">
+            <span class="label">Winners log</span>
+            <div class="winners-log-actions">
+              <button id="download-winners-button" class="ghost-button small-button" type="button">Download CSV</button>
+              <button id="clear-winners-button" class="ghost-button small-button" type="button">Clear</button>
+            </div>
+          </div>
+          <ol id="winners-list" class="winners-list"></ol>
+          <p id="winners-empty" class="import-help">No prizes drawn yet.</p>
         </div>
       </div>
     </div>

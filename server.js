@@ -139,12 +139,13 @@ function listEvents() {
   return files
     .map((file) => readEvent(file.slice(0, -5)))
     .filter(Boolean)
-    .map(({ slug, name, sheetUrl, names, removedNames, createdAt, updatedAt }) => ({
+    .map(({ slug, name, sheetUrl, names, removedNames, awards = [], createdAt, updatedAt }) => ({
       slug,
       name,
       sheetUrl,
       nameCount: names.length,
       removedCount: removedNames.length,
+      awardCount: awards.length,
       createdAt,
       updatedAt,
     }))
@@ -174,6 +175,22 @@ function applyEventChanges(event, changes) {
   }
   if (Array.isArray(changes.removedNames)) {
     event.removedNames = changes.removedNames.map(String);
+  }
+  if (typeof changes.prizesText === "string") {
+    event.prizesText = changes.prizesText.slice(0, 20000);
+  }
+  if (Number.isInteger(changes.currentPrizeIndex) && changes.currentPrizeIndex >= 0) {
+    event.currentPrizeIndex = changes.currentPrizeIndex;
+  }
+  if (Array.isArray(changes.awards)) {
+    event.awards = changes.awards
+      .filter((award) => award && typeof award === "object")
+      .map((award) => ({
+        id: String(award.id || ""),
+        name: String(award.name || ""),
+        prize: String(award.prize || ""),
+        at: String(award.at || ""),
+      }));
   }
   if (changes.settings && typeof changes.settings === "object") {
     event.settings = changes.settings;
@@ -273,6 +290,9 @@ async function handleEventsApi(req, res, pathname) {
         sheetUrl: String(body.sheetUrl || "").trim(),
         names: [],
         removedNames: [],
+        prizesText: "",
+        currentPrizeIndex: 0,
+        awards: [],
         settings: template ? template.settings : null,
         createdAt: now,
         updatedAt: now,

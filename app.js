@@ -50,6 +50,22 @@ const sheetSyncButton = document.getElementById("sheet-sync-button");
 const sheetSyncStatus = document.getElementById("sheet-sync-status");
 
 const saveStatus = document.getElementById("save-status");
+const prizesButton = document.getElementById("prizes-button");
+const prizesModal = document.getElementById("prizes-modal");
+const closePrizesButton = document.getElementById("close-prizes-button");
+const prizesInput = document.getElementById("prizes-input");
+const prizeList = document.getElementById("prize-list");
+const winnersList = document.getElementById("winners-list");
+const winnersEmpty = document.getElementById("winners-empty");
+const downloadWinnersButton = document.getElementById("download-winners-button");
+const clearWinnersButton = document.getElementById("clear-winners-button");
+const prizeBanner = document.getElementById("prize-banner");
+const prizeBannerName = document.getElementById("prize-banner-name");
+const prizeBannerCount = document.getElementById("prize-banner-count");
+const prevPrizeButton = document.getElementById("prev-prize-button");
+const nextPrizeButton = document.getElementById("next-prize-button");
+const winnerModalPrize = document.getElementById("winner-modal-prize");
+const voidDrawButton = document.getElementById("void-draw-button");
 
 const sheetPollIntervalMs = 5000;
 const sheetSyncHelpText = sheetSyncStatus.textContent.trim();
@@ -65,6 +81,13 @@ const eventApiUrl = `/api/events/${encodeURIComponent(eventSlug)}`;
 const saveDelayMs = 600;
 let eventReady = false;
 let saveTimer = null;
+
+// Prizes are drawn top to bottom; each draw for a prize is logged as an award.
+let prizes = [];
+let currentPrizeIndex = 0;
+let awards = [];
+let lastAwardId = "";
+let lastPrizesFocus = null;
 
 let rotation = 0;
 let spinVelocity = 0;
@@ -143,11 +166,14 @@ function updateNames(names) {
   scheduleSave();
 }
 
-function openWinnerModal(name) {
+function openWinnerModal(name, prizeName = "") {
   lastFocusedElement = document.activeElement;
   lastWinner = name;
   winnerModalTitle.textContent = wheelSettings.popupHeaderText;
   winnerModalName.textContent = name;
+  winnerModalPrize.textContent = prizeName ? `wins ${prizeName}` : "";
+  winnerModalPrize.classList.toggle("hidden", !prizeName);
+  voidDrawButton.classList.toggle("hidden", !prizeName);
   winnerModal.classList.remove("hidden");
   winnerModal.setAttribute("aria-hidden", "false");
   closeModalButton.focus();
@@ -367,6 +393,232 @@ function handleSheetSyncButton() {
   startSheetSync(url);
 }
 
+function parsePrizes(text) {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(.*?)\s*[x×]\s*(\d+)$/i);
+      if (match && match[1]) {
+        return { name: match[1], quantity: Math.max(1, Number(match[2])) };
+      }
+      return { name: line, quantity: 1 };
+    });
+}
+
+function countAwards(prizeName) {
+  return awards.filter((award) => award.prize === prizeName).length;
+}
+
+function isPrizeComplete(index) {
+  return countAwards(prizes[index].name) >= prizes[index].quantity;
+}
+
+function findNextOpenPrize(fromIndex) {
+  for (let index = fromIndex; index < prizes.length; index += 1) {
+    if (!isPrizeComplete(index)) {
+      return index;
+    }
+  }
+  return prizes.length;
+}
+
+function getCurrentPrize() {
+  return prizes[currentPrizeIndex] || null;
+}
+
+function renderPrizeBanner() {
+  const prize = getCurrentPrize();
+  prizeBanner.classList.toggle("hidden", prizes.length === 0);
+  bodyElement.classList.toggle("has-prizes", prizes.length > 0);
+
+  if (!prize) {
+    prizeBannerName.textContent = "All prizes drawn";
+    prizeBannerCount.textContent = "";
+  } else {
+    const drawn = countAwards(prize.name);
+    prizeBannerName.textContent = prize.name;
+    prizeBannerCount.textContent = prize.quantity > 1
+      ? `Draw ${Math.min(drawn + 1, prize.quantity)} of ${prize.quantity}`
+      : "";
+  }
+
+  prevPrizeButton.disabled = currentPrizeIndex <= 0;
+  nextPrizeButton.disabled = currentPrizeIndex >= prizes.length;
+}
+
+function formatAwardTime(iso) {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function renderPrizesPanel() {
+  prizeList.replaceChildren();
+  prizes.forEach((prize, index) => {
+    const item = document.createElement("li");
+    item.className = "prize-item";
+    item.classList.toggle("current", index === currentPrizeIndex);
+    item.classList.toggle("complete", isPrizeComplete(index));
+
+    const label = document.createElement("span");
+    label.className = "prize-item-name";
+    label.textContent = prize.name;
+
+    const status = document.createElement("span");
+    status.className = "prize-item-status";
+    status.textContent = `${countAwards(prize.name)} / ${prize.quantity} drawn`;
+
+    const select = document.createElement("button");
+    select.type = "button";
+    select.className = "ghost-button small-button";
+    select.textContent = index === currentPrizeIndex ? "Up next" : "Spin for this";
+    select.disabled = index === currentPrizeIndex;
+    select.addEventListener("click", () => setCurrentPrize(index));
+
+    item.append(label, status, select);
+    prizeList.append(item);
+  });
+
+  winnersList.replaceChildren();
+  awards.forEach((award) => {
+    const item = document.createElement("li");
+    item.className = "winner-item";
+
+    const text = document.createElement("span");
+    text.className = "winner-item-text";
+    const who = document.createElement("strong");
+    who.textContent = award.name;
+    text.append(who, ` – ${award.prize} · ${formatAwardTime(award.at)}`);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "winner-item-remove";
+    remove.setAttribute("aria-label", `Remove ${award.name} from the log`);
+    remove.textContent = "×";
+    remove.addEventListener("click", () => removeAward(award.id));
+
+    item.append(text, remove);
+    winnersList.append(item);
+  });
+  winnersEmpty.hidden = awards.length > 0;
+  downloadWinnersButton.disabled = awards.length === 0;
+  clearWinnersButton.disabled = awards.length === 0;
+}
+
+function renderPrizes() {
+  renderPrizeBanner();
+  renderPrizesPanel();
+}
+
+function setCurrentPrize(index) {
+  currentPrizeIndex = Math.max(0, Math.min(index, prizes.length));
+  renderPrizes();
+  scheduleSave();
+}
+
+function handlePrizesInput() {
+  const currentName = getCurrentPrize()?.name;
+  prizes = parsePrizes(prizesInput.value);
+  // Keep pointing at the same prize while the list is being edited.
+  const sameIndex = prizes.findIndex((prize) => prize.name === currentName);
+  currentPrizeIndex = sameIndex !== -1 ? sameIndex : findNextOpenPrize(0);
+  renderPrizes();
+  scheduleSave();
+}
+
+// Logs the winner against the current prize and returns the prize name ("" if none).
+function recordAward(winnerName) {
+  const prize = getCurrentPrize();
+  lastAwardId = "";
+  if (!prize) {
+    return "";
+  }
+
+  const award = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: winnerName,
+    prize: prize.name,
+    at: new Date().toISOString(),
+  };
+  awards.push(award);
+  lastAwardId = award.id;
+
+  if (isPrizeComplete(currentPrizeIndex)) {
+    currentPrizeIndex = findNextOpenPrize(currentPrizeIndex + 1);
+  }
+  renderPrizes();
+  scheduleSave();
+  return prize.name;
+}
+
+function removeAward(awardId) {
+  const award = awards.find((entry) => entry.id === awardId);
+  if (!award) {
+    return;
+  }
+
+  awards = awards.filter((entry) => entry.id !== awardId);
+  // Point back at the prize that just got a slot free again.
+  const prizeIndex = prizes.findIndex((prize) => prize.name === award.prize);
+  if (prizeIndex !== -1 && prizeIndex < currentPrizeIndex) {
+    currentPrizeIndex = prizeIndex;
+  }
+  renderPrizes();
+  scheduleSave();
+}
+
+function voidLastDraw() {
+  if (lastAwardId) {
+    removeAward(lastAwardId);
+    lastAwardId = "";
+  }
+  closeWinnerModal();
+}
+
+function clearAwards() {
+  if (!window.confirm("Clear the whole winners log? Prizes will be available to draw again.")) {
+    return;
+  }
+  awards = [];
+  currentPrizeIndex = findNextOpenPrize(0);
+  renderPrizes();
+  scheduleSave();
+}
+
+function downloadWinnersCsv() {
+  const escapeCell = (value) => `"${String(value).replace(/"/g, '""')}"`;
+  const rows = [["Time", "Prize", "Winner"]].concat(
+    awards.map((award) => [new Date(award.at).toLocaleString(), award.prize, award.name])
+  );
+  const csv = rows.map((row) => row.map(escapeCell).join(",")).join("\r\n");
+  // The BOM makes Excel open non-Latin names (e.g. Thai) correctly.
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${eventSlug || "wheel"}-winners.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function openPrizesModal() {
+  lastPrizesFocus = document.activeElement;
+  renderPrizesPanel();
+  prizesModal.classList.remove("hidden");
+  prizesModal.setAttribute("aria-hidden", "false");
+  closePrizesButton.focus();
+}
+
+function closePrizesModal() {
+  prizesModal.classList.add("hidden");
+  prizesModal.setAttribute("aria-hidden", "true");
+  if (lastPrizesFocus instanceof HTMLElement) {
+    lastPrizesFocus.focus();
+  }
+}
+
 function getSettingsSnapshot() {
   return {
     ...wheelSettings,
@@ -400,6 +652,9 @@ async function saveEvent() {
         names: parseNames(),
         removedNames: removedSheetNames,
         sheetUrl,
+        prizesText: prizesInput.value,
+        currentPrizeIndex,
+        awards,
         settings: getSettingsSnapshot(),
       }),
     });
@@ -427,6 +682,11 @@ async function loadEvent() {
       applyLoadedSettings(event.settings);
     }
     updateNames(event.names || []);
+    prizesInput.value = event.prizesText || "";
+    prizes = parsePrizes(prizesInput.value);
+    awards = Array.isArray(event.awards) ? event.awards : [];
+    currentPrizeIndex = Number.isInteger(event.currentPrizeIndex) ? event.currentPrizeIndex : findNextOpenPrize(0);
+    renderPrizes();
     if (event.sheetUrl) {
       startSheetSync(event.sheetUrl, event.removedNames || []);
     }
@@ -659,7 +919,7 @@ function startSpin() {
     winnerText.textContent = winner;
     drawWheel(names);
     stopIdleSpin();
-    openWinnerModal(winner);
+    openWinnerModal(winner, recordAward(winner));
   }
 
   spinAnimationId = requestAnimationFrame(scriptedSpin);
@@ -979,6 +1239,20 @@ spinAgainButton.addEventListener("click", () => {
   startSpin();
 });
 closeCustomizeButton.addEventListener("click", closeCustomizeModal);
+prizesButton.addEventListener("click", openPrizesModal);
+closePrizesButton.addEventListener("click", closePrizesModal);
+prizesModal.addEventListener("click", (event) => {
+  const target = event.target;
+  if (target instanceof HTMLElement && target.dataset.closePrizes === "true") {
+    closePrizesModal();
+  }
+});
+prizesInput.addEventListener("input", handlePrizesInput);
+prevPrizeButton.addEventListener("click", () => setCurrentPrize(currentPrizeIndex - 1));
+nextPrizeButton.addEventListener("click", () => setCurrentPrize(currentPrizeIndex + 1));
+voidDrawButton.addEventListener("click", voidLastDraw);
+downloadWinnersButton.addEventListener("click", downloadWinnersCsv);
+clearWinnersButton.addEventListener("click", clearAwards);
 spinDurationInput.addEventListener("input", updateSpinDuration);
 popupHeaderInput.addEventListener("input", updatePopupHeader);
 textColorInput.addEventListener("input", updateTextColor);
@@ -1019,10 +1293,22 @@ document.addEventListener("keydown", (event) => {
       return;
     }
 
-    if (namesModal.classList.contains("hidden") && customizeModal.classList.contains("hidden")) {
+    if (
+      namesModal.classList.contains("hidden")
+      && customizeModal.classList.contains("hidden")
+      && prizesModal.classList.contains("hidden")
+    ) {
       startSpin();
       return;
     }
+  }
+
+  const noModalOpen = [winnerModal, namesModal, customizeModal, prizesModal]
+    .every((modal) => modal.classList.contains("hidden"));
+  if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && noModalOpen && prizes.length > 0) {
+    event.preventDefault();
+    setCurrentPrize(currentPrizeIndex + (event.key === "ArrowRight" ? 1 : -1));
+    return;
   }
 
   if ((event.key === "r" || event.key === "R") && !winnerModal.classList.contains("hidden")) {
@@ -1049,6 +1335,11 @@ document.addEventListener("keydown", (event) => {
 
   if (event.key === "Escape" && !customizeModal.classList.contains("hidden")) {
     closeCustomizeModal();
+    return;
+  }
+
+  if (event.key === "Escape" && !prizesModal.classList.contains("hidden")) {
+    closePrizesModal();
   }
 });
 

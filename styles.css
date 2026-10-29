@@ -659,6 +659,7 @@ canvas {
 
 .modal-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 0.8rem;
   margin-top: 1.4rem;
@@ -666,6 +667,7 @@ canvas {
 
 .modal-actions .modal-action {
   margin-top: 0;
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {
@@ -889,4 +891,213 @@ body.events-page {
   .event-actions {
     flex-wrap: wrap;
   }
+}
+
+/* ---- Prizes ---- */
+
+body.has-prizes .wheel-stage {
+  width: min(72vh, 86vw);
+  margin-bottom: 9vh;
+}
+
+.prize-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.6rem 0.75rem;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, transparent 100%),
+    var(--landing-actions-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+.prize-banner.hidden {
+  display: none;
+}
+
+.prize-banner-text {
+  display: grid;
+  justify-items: center;
+  min-width: 12rem;
+  padding: 0 0.5rem;
+  text-align: center;
+}
+
+.prize-banner-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#prize-banner-name {
+  font-family: "Roboto Flex", sans-serif;
+  font-size: clamp(1.2rem, 2.6vw, 1.9rem);
+  line-height: 1.15;
+  color: var(--accent-strong);
+  overflow-wrap: anywhere;
+}
+
+.prize-banner-count {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.prize-banner-count:empty {
+  display: none;
+}
+
+.prize-step {
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  flex-shrink: 0;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+}
+
+body.presentation-mode .prize-step {
+  display: none;
+}
+
+.modal-prize {
+  margin: 0.8rem 0 0;
+  font-size: clamp(1.1rem, 3vw, 1.5rem);
+  font-weight: 800;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.modal-prize.hidden,
+.modal-action.hidden {
+  display: none;
+}
+
+.prizes-input {
+  min-height: 9rem;
+}
+
+.prize-list,
+.winners-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.prize-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.6rem 0.6rem 1rem;
+  border-radius: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+}
+
+.prize-item.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.prize-item.complete .prize-item-name {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.prize-item-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.prize-item-status {
+  font-size: 0.85rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.winners-log {
+  margin-top: 1.5rem;
+  text-align: left;
+}
+
+.winners-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.winners-log-header .label {
+  margin: 0;
+}
+
+.winners-log-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.winners-list {
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.winner-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.9rem;
+  border-radius: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  font-size: 0.92rem;
+}
+
+.winner-item-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.winner-item-remove {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  flex-shrink: 0;
+  color: var(--muted);
+  background: transparent;
+}
+
+@media (max-width: 640px) {
+  .prize-item {
+    flex-wrap: wrap;
+  }
+
+  .winners-log-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+#winner-modal .modal-card {
+  width: min(38rem, calc(100vw - 2rem));
 }
