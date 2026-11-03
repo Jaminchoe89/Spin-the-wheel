@@ -51,6 +51,7 @@ const popupHeaderInput = $("popup-header");
 const arrowPositionInput = $("arrow-position");
 const arrowPositionValue = $("arrow-position-value");
 const appThemeButtons = Array.from(document.querySelectorAll("[data-app-theme]"));
+const soundButtons = Array.from(document.querySelectorAll("[data-sound]"));
 const textColorInput = $("text-color");
 const textColorValue = $("text-color-value");
 const arrowColorInput = $("arrow-color");
@@ -610,6 +611,9 @@ function renderLook() {
   appThemeButtons.forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.appTheme === settings.appTheme));
   });
+  soundButtons.forEach((button) => {
+    button.setAttribute("aria-pressed", String((button.dataset.sound === "on") === settings.soundEnabled));
+  });
   textColorInput.value = settings.textColor;
   textColorValue.textContent = settings.textColor.toUpperCase();
   arrowColorInput.value = settings.arrowColor;
@@ -790,6 +794,9 @@ popupHeaderInput.addEventListener("input", () => updateSettings({ popupHeaderTex
 arrowPositionInput.addEventListener("input", () => updateSettings({ pointerClockHour: Number(arrowPositionInput.value) }));
 appThemeButtons.forEach((button) => {
   button.addEventListener("click", () => updateSettings({ appTheme: button.dataset.appTheme }));
+});
+soundButtons.forEach((button) => {
+  button.addEventListener("click", () => updateSettings({ soundEnabled: button.dataset.sound === "on" }));
 });
 textColorInput.addEventListener("input", () => updateSettings({ textColor: textColorInput.value }));
 arrowColorInput.addEventListener("input", () => updateSettings({ arrowColor: arrowColorInput.value }));

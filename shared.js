@@ -21,6 +21,7 @@ const defaultSettings = {
   textColor: "#fff9f0",
   arrowColor: "#8f2b18",
   pointerClockHour: 12,
+  soundEnabled: true,
   wheelBackdropColor: defaultPageBackgrounds.light,
   wheelBackdropColorCustom: false,
   palette: [...wheelThemes[0].palette],
@@ -34,6 +35,7 @@ function normalizeSettings(saved) {
   settings.appTheme = settings.appTheme === "dark" ? "dark" : "light";
   settings.spinDurationSeconds = Number(settings.spinDurationSeconds) || defaultSettings.spinDurationSeconds;
   settings.pointerClockHour = Number(settings.pointerClockHour) || 12;
+  settings.soundEnabled = settings.soundEnabled !== false;
   settings.popupHeaderText = String(settings.popupHeaderText || "").trim() || defaultSettings.popupHeaderText;
   if (!Array.isArray(settings.palette) || settings.palette.length === 0) {
     const theme = wheelThemes[settings.selectedThemeIndex];

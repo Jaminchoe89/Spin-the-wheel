@@ -14,6 +14,7 @@ const revealName = document.getElementById("reveal-name");
 const revealPrize = document.getElementById("reveal-prize");
 const fullscreenHint = document.getElementById("fullscreen-hint");
 const connectionNote = document.getElementById("connection-note");
+const soundNote = document.getElementById("sound-note");
 
 const eventSlug = decodeURIComponent(window.location.pathname.split("/")[1] || "").toLowerCase();
 const isPreview = new URLSearchParams(window.location.search).has("preview");
@@ -181,6 +182,9 @@ function playSpin(spin) {
   const startRotation = rotation;
   const extraRotation = rounds * Math.PI * 2 + normalizeAngle(target - normalizeAngle(rotation));
   const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
+  const sliceAngle = (Math.PI * 2) / names.length;
+  const sliceUnderPointer = () => Math.floor(normalizeAngle(getPointerWorldAngle() - rotation) / sliceAngle);
+  let lastSlice = sliceUnderPointer();
   let startTime = null;
 
   const frame = (timestamp) => {
@@ -191,6 +195,15 @@ function playSpin(spin) {
     rotation = startRotation + extraRotation * easeOutQuint(progress);
     drawWheel();
 
+    // Tick whenever a new slice reaches the pointer; ticks slow as the wheel does.
+    const slice = sliceUnderPointer();
+    if (slice !== lastSlice) {
+      lastSlice = slice;
+      if (soundOn()) {
+        wheelSounds.tick(Math.pow(1 - progress, 2));
+      }
+    }
+
     if (progress < 1) {
       spinAnimationId = requestAnimationFrame(frame);
       return;
@@ -198,6 +211,9 @@ function playSpin(spin) {
     spinAnimationId = null;
     if (currentSpinId === spin.spinId) {
       showReveal(spin);
+      if (soundOn()) {
+        wheelSounds.fanfare();
+      }
     }
   };
   spinAnimationId = requestAnimationFrame(frame);
@@ -223,6 +239,7 @@ function applySettings(next) {
   const root = document.documentElement;
   root.dataset.theme = settings.appTheme;
   root.style.setProperty("--page", settings.wheelBackdropColor);
+  updateSoundNote();
   document.body.style.backgroundImage = settings.pageBackgroundImage ? `url("${settings.pageBackgroundImage}")` : "none";
   updatePointer();
 
@@ -300,6 +317,24 @@ function handleLive(state) {
   }
 }
 
+// ---- Sound ----
+
+// The preview inside the control screen stays silent so the room doesn't hear it twice.
+function soundOn() {
+  return !isPreview && settings.soundEnabled;
+}
+
+function updateSoundNote() {
+  soundNote.hidden = !soundOn() || wheelSounds.isUnlocked();
+}
+
+async function unlockSound() {
+  if (!isPreview) {
+    await wheelSounds.unlock();
+    updateSoundNote();
+  }
+}
+
 // ---- Screen behaviour ----
 
 function showCursorBriefly() {
@@ -336,8 +371,12 @@ if (!isPreview) {
   setTimeout(() => {
     fullscreenHint.hidden = true;
   }, 6500);
-  document.addEventListener("click", enterFullscreen);
+  document.addEventListener("click", () => {
+    enterFullscreen();
+    unlockSound();
+  });
   document.addEventListener("keydown", (event) => {
+    unlockSound();
     if (event.key === "f" || event.key === "F") {
       enterFullscreen();
     }

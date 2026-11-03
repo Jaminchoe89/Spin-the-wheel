@@ -254,6 +254,11 @@ canvas {
   transition: opacity 500ms var(--ease);
 }
 
+.corner-note-left {
+  right: auto;
+  left: 24px;
+}
+
 .corner-note[hidden] {
   display: none;
 }

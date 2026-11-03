@@ -29,6 +29,7 @@ const publicFiles = new Set([
   "display.js",
   "display.css",
   "shared.js",
+  "sounds.js",
   "styles.css",
 ]);
 const slugPattern = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
