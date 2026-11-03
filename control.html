@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Control · Spin the Wheel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to controls</a>
+
+    <nav class="topbar" aria-label="Event">
+      <a class="button quiet small" href="/"><i class="ph ph-arrow-left" aria-hidden="true"></i>Events</a>
+      <span id="event-title" class="topbar-title title-3">Loading event</span>
+      <span id="display-status" class="status-pill hide-mobile"><span class="status-dot"></span><span id="display-status-text">No display open</span></span>
+      <span id="save-status" class="caption-4 muted hide-mobile" role="status"></span>
+      <a id="open-display" class="button primary small" href="#" target="_blank" rel="noopener">
+        <i class="ph ph-monitor" aria-hidden="true"></i>Open display
+      </a>
+    </nav>
+
+    <main id="main" class="control-grid">
+      <section class="stage" aria-label="Spin">
+        <div class="preview">
+          <iframe id="preview-frame" title="Live preview of the display" tabindex="-1"></iframe>
+          <span class="preview-label caption-3">Live preview</span>
+        </div>
+
+        <div class="panel spin-bar">
+          <div class="prize-stepper">
+            <button id="prev-prize" class="icon-button" type="button" aria-label="Previous prize"><i class="ph ph-caret-left"></i></button>
+            <div class="prize-stepper-text">
+              <span class="caption-4 muted">Spinning for</span>
+              <strong id="current-prize" class="title-3">No prize set</strong>
+            </div>
+            <button id="next-prize" class="icon-button" type="button" aria-label="Next prize"><i class="ph ph-caret-right"></i></button>
+          </div>
+          <button id="spin-button" class="button primary spin-button" type="button">Spin <kbd>Space</kbd></button>
+        </div>
+
+        <div class="panel result" aria-live="polite">
+          <p id="result-headline" class="result-headline heading-5">Ready when you are</p>
+          <p id="result-detail" class="body-6 muted">Press Spin or the space bar. The display shows the result at the same moment.</p>
+          <div id="result-actions" class="result-actions" hidden>
+            <button id="remove-winner" class="button secondary small" type="button">Remove from wheel <kbd>R</kbd></button>
+            <button id="void-draw" class="button secondary small" type="button">Void draw <kbd>V</kbd></button>
+            <button id="dismiss-result" class="button quiet small" type="button">Close result <kbd>Esc</kbd></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="side" aria-label="Event setup">
+        <div class="tabs" role="tablist" aria-label="Event setup">
+          <button class="tab" role="tab" id="tab-names" aria-controls="panel-names" aria-selected="true">Names<span id="names-count" class="tab-count">0</span></button>
+          <button class="tab" role="tab" id="tab-prizes" aria-controls="panel-prizes" aria-selected="false" tabindex="-1">Prizes</button>
+          <button class="tab" role="tab" id="tab-winners" aria-controls="panel-winners" aria-selected="false" tabindex="-1">Winners<span id="winners-count" class="tab-count">0</span></button>
+          <button class="tab" role="tab" id="tab-look" aria-controls="panel-look" aria-selected="false" tabindex="-1">Look</button>
+        </div>
+
+        <!-- Names -->
+        <div class="panel tab-panel" role="tabpanel" id="panel-names" aria-labelledby="tab-names">
+          <div class="section">
+            <label class="field-label" for="sheet-url">Live sheet</label>
+            <div class="input-row">
+              <input id="sheet-url" class="input" type="url" placeholder="Paste a Google Sheets or OneDrive link" spellcheck="false" />
+              <button id="sheet-sync" class="button secondary small" type="button">Connect</button>
+            </div>
+            <p id="sheet-status" class="field-hint">Share the sheet as “Anyone with the link”. Names in the first column update every 5 seconds.</p>
+          </div>
+
+          <div class="section">
+            <div class="section-header">
+              <label class="field-label" for="names-input">Names on the wheel</label>
+              <span id="names-mode" class="caption-4 muted">Typed list</span>
+            </div>
+            <textarea id="names-input" class="textarea" spellcheck="false" placeholder="One name per line"></textarea>
+            <label class="field">
+              <span class="field-hint">Or import the first column of a CSV or Excel file</span>
+              <input id="file-input" class="input" type="file" accept=".csv,.xlsx,.xls" />
+            </label>
+          </div>
+
+          <div id="removed-section" class="section" hidden>
+            <div class="section-header">
+              <span class="field-label">Removed from wheel</span>
+              <button id="restore-removed" class="button quiet small" type="button">Put them back</button>
+            </div>
+            <p id="removed-list" class="body-6 muted"></p>
+          </div>
+        </div>
+
+        <!-- Prizes -->
+        <div class="panel tab-panel" role="tabpanel" id="panel-prizes" aria-labelledby="tab-prizes" hidden>
+          <div class="section">
+            <label class="field-label" for="prizes-input">Prizes, in draw order</label>
+            <textarea id="prizes-input" class="textarea" spellcheck="false" placeholder="Lucky draw voucher x5&#10;Dyson Airwrap x2&#10;iPhone 17 Pro"></textarea>
+            <p class="field-hint">One prize per line. Add x3 to draw a prize three times. Leave empty to spin without prizes.</p>
+          </div>
+          <div class="section">
+            <span class="field-label">Draw order</span>
+            <ul id="prize-list" class="list"></ul>
+            <p id="prize-empty" class="empty body-6">Add a prize above and it shows on the display while you spin for it.</p>
+          </div>
+        </div>
+
+        <!-- Winners -->
+        <div class="panel tab-panel" role="tabpanel" id="panel-winners" aria-labelledby="tab-winners" hidden>
+          <div class="section">
+            <div class="section-header">
+              <span class="field-label">Winners log</span>
+              <div class="button-row">
+                <button id="download-winners" class="button secondary small" type="button"><i class="ph ph-download-simple" aria-hidden="true"></i>CSV</button>
+                <button id="clear-winners" class="button quiet small" type="button">Clear log</button>
+              </div>
+            </div>
+            <ol id="winners-list" class="list scroll-list"></ol>
+            <p id="winners-empty" class="empty body-6">Each prize draw is logged here with the time. Download it as a CSV after the event.</p>
+          </div>
+        </div>
+
+        <!-- Look -->
+        <div class="panel tab-panel" role="tabpanel" id="panel-look" aria-labelledby="tab-look" hidden>
+          <div class="section">
+            <span class="field-label">Wheel colours</span>
+            <div id="theme-grid" class="theme-grid"></div>
+          </div>
+
+          <div class="section">
+            <div class="settings-row">
+              <label class="field" for="spin-duration">
+                <span class="field-label">Spin time <span id="spin-duration-value" class="muted">7.0s</span></span>
+                <input id="spin-duration" class="range" type="range" min="3" max="15" step="0.5" />
+              </label>
+              <label class="field" for="popup-header">
+                <span class="field-label">Reveal heading</span>
+                <input id="popup-header" class="input" type="text" maxlength="80" />
+              </label>
+            </div>
+            <div class="settings-row">
+              <label class="field" for="arrow-position">
+                <span class="field-label">Pointer position <span id="arrow-position-value" class="muted">12 o'clock</span></span>
+                <input id="arrow-position" class="range" type="range" min="1" max="12" step="1" />
+              </label>
+              <div class="field">
+                <span class="field-label">Display theme</span>
+                <div class="segmented" role="group" aria-label="Display theme">
+                  <button type="button" data-app-theme="light" aria-pressed="true">Light</button>
+                  <button type="button" data-app-theme="dark" aria-pressed="false">Dark</button>
+                </div>
+              </div>
+            </div>
+            <div class="settings-row">
+              <label class="field" for="text-color">
+                <span class="field-label">Name colour</span>
+                <span class="color-row"><input id="text-color" class="color-input" type="color" /><span id="text-color-value" class="body-6 muted"></span></span>
+              </label>
+              <label class="field" for="arrow-color">
+                <span class="field-label">Pointer colour</span>
+                <span class="color-row"><input id="arrow-color" class="color-input" type="color" /><span id="arrow-color-value" class="body-6 muted"></span></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="section">
+            <label class="field" for="page-color">
+              <span class="field-label">Background colour</span>
+              <span class="color-row">
+                <input id="page-color" class="color-input" type="color" />
+                <span id="page-color-value" class="body-6 muted"></span>
+                <button id="reset-page-color" class="button quiet small" type="button">Use theme default</button>
+              </span>
+            </label>
+            <label class="field" for="page-image">
+              <span class="field-label">Background image</span>
+              <input id="page-image" class="input" type="file" accept="image/*" />
+            </label>
+            <div class="button-row">
+              <span id="page-image-status" class="body-6 muted">No background image</span>
+              <button id="clear-page-image" class="button quiet small" type="button">Remove</button>
+            </div>
+            <label class="field" for="wheel-image">
+              <span class="field-label">Image inside the wheel</span>
+              <input id="wheel-image" class="input" type="file" accept="image/*" />
+            </label>
+            <div class="button-row">
+              <span id="wheel-image-status" class="body-6 muted">No wheel image</span>
+              <button id="clear-wheel-image" class="button quiet small" type="button">Remove</button>
+            </div>
+          </div>
+
+          <div class="section">
+            <span class="field-label">Reuse this look</span>
+            <p class="field-hint">Save it to a file, or load one saved from another event.</p>
+            <div class="button-row">
+              <button id="save-settings" class="button secondary small" type="button">Save look to file</button>
+              <button id="load-settings" class="button secondary small" type="button">Load look from file</button>
+              <input id="load-settings-input" type="file" accept=".json,application/json" hidden />
+            </div>
+            <p id="look-status" class="field-hint" role="status"></p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="/shared.js"></script>
+    <script src="/control.js"></script>
+  </body>
+</html>

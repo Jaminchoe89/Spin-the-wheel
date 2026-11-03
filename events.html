@@ -1,65 +1,79 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
     <title>Events · Spin the Wheel</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,400;8..144,500;8..144,600;8..144,700;8..144,800&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body class="events-page">
-    <main class="events-shell">
-      <header class="events-header">
-        <h1>Events</h1>
-        <p>Each event gets its own wheel, names and look. Run as many as you like at the same time.</p>
+  <body>
+    <a class="skip-link" href="#main">Skip to events</a>
+
+    <nav class="topbar" aria-label="Site">
+      <span class="topbar-title brand">Spin the Wheel</span>
+      <span class="caption-4 muted hide-mobile">Compass Events</span>
+    </nav>
+
+    <main id="main" class="page">
+      <header class="page-intro">
+        <h1 class="heading-4">Events</h1>
+        <p class="body-6 muted">
+          Each event has a control screen for you and a clean display screen for the audience.
+          Several events can run at the same time.
+        </p>
       </header>
 
-      <section class="events-panel" aria-labelledby="create-title">
-        <h2 id="create-title">New event</h2>
-        <form id="create-form" novalidate>
+      <section class="panel" aria-labelledby="create-title">
+        <h2 id="create-title" class="heading-6">New event</h2>
+        <form id="create-form" novalidate style="margin-top: 16px">
           <div class="create-grid">
             <label class="field" for="event-name-input">
-              Event name
-              <input id="event-name-input" class="text-input" type="text" maxlength="120" placeholder="DBS Gala Dinner 2026" required />
+              <span class="field-label">Event name</span>
+              <input id="event-name-input" class="input" type="text" maxlength="120" placeholder="DBS Gala Dinner 2026" required />
             </label>
 
             <label class="field" for="event-slug-input">
-              Wheel address
-              <div class="slug-row">
-                <span id="slug-prefix">wheel.compass.sg/</span>
-                <input id="event-slug-input" class="text-input" type="text" maxlength="60" placeholder="dbs-gala-2026" spellcheck="false" />
-              </div>
+              <span class="field-label">Web address</span>
+              <span class="slug-row">
+                <span id="slug-prefix" class="body-6">wheel.compass.sg/</span>
+                <input id="event-slug-input" class="input" type="text" maxlength="60" placeholder="dbs-gala-2026" spellcheck="false" />
+              </span>
             </label>
 
             <label class="field wide" for="event-sheet-input">
-              Shared sheet link <span class="hint">(optional – you can add it on the wheel later)</span>
-              <input id="event-sheet-input" class="text-input" type="url" placeholder="Paste a Google Sheets or OneDrive/SharePoint link" spellcheck="false" />
+              <span class="field-label">Shared sheet link</span>
+              <input id="event-sheet-input" class="input" type="url" placeholder="Optional. You can add it from the control screen later" spellcheck="false" />
             </label>
 
             <label class="field wide" for="copy-from-select">
-              Copy look from <span class="hint">(colours, images, popup text)</span>
-              <select id="copy-from-select" class="text-input">
+              <span class="field-label">Copy the look from</span>
+              <select id="copy-from-select" class="select">
                 <option value="">Default look</option>
               </select>
             </label>
           </div>
 
-          <div class="create-actions">
-            <button class="primary-button" type="submit">Create wheel</button>
-            <p id="form-error" class="form-error" role="alert"></p>
+          <div class="form-actions">
+            <button class="button primary" type="submit">Create event</button>
+            <p id="form-error" class="form-error body-6" role="alert"></p>
           </div>
         </form>
       </section>
 
-      <section class="events-panel" aria-labelledby="list-title">
-        <h2 id="list-title">All events</h2>
-        <ul id="event-list" class="event-list"></ul>
-        <p id="empty-state" class="empty-state">No events yet. Create one above.</p>
+      <section class="panel" aria-labelledby="list-title">
+        <h2 id="list-title" class="heading-6">All events</h2>
+        <ul id="event-list" class="list" style="margin-top: 16px">
+          <li class="skeleton"></li>
+          <li class="skeleton"></li>
+        </ul>
+        <p id="empty-state" class="empty body-6" style="margin-top: 16px" hidden>
+          No events yet. Create one above and its control screen opens straight away.
+        </p>
       </section>
     </main>
 

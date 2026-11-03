@@ -21,30 +21,57 @@ function slugify(text) {
     .replace(/-+$/, "");
 }
 
-function eventUrl(slug) {
-  return `${window.location.origin}/${slug}`;
+function displayUrl(slug) {
+  return `${window.location.origin}/${slug}/display`;
 }
 
 function describeEvent(event) {
-  const parts = [`/${event.slug}`];
-  parts.push(event.sheetUrl ? "Synced to sheet" : `${event.nameCount} names`);
-  if (event.removedCount > 0) {
-    parts.push(`${event.removedCount} winners removed`);
-  }
+  const parts = [event.sheetUrl ? "Live sheet" : `${event.nameCount} names`];
   if (event.awardCount > 0) {
     parts.push(`${event.awardCount} prizes drawn`);
   }
-  parts.push(`updated ${new Date(event.updatedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`);
+  parts.push(`Updated ${new Date(event.updatedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`);
   return parts.join(" · ");
+}
+
+function createLink(label, href, className, icon) {
+  const link = document.createElement("a");
+  link.className = `button small ${className}`;
+  link.href = href;
+  if (icon) {
+    const glyph = document.createElement("i");
+    glyph.className = `ph ${icon}`;
+    glyph.setAttribute("aria-hidden", "true");
+    link.append(glyph);
+  }
+  link.append(label);
+  return link;
 }
 
 function createButton(label, className, onClick) {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = `ghost-button small-button ${className}`.trim();
+  button.className = `button small ${className}`;
   button.textContent = label;
   button.addEventListener("click", onClick);
   return button;
+}
+
+// Destructive buttons ask for a second click instead of a browser dialog.
+function confirmClick(button, confirmLabel, action) {
+  if (button.dataset.confirming === "true") {
+    action();
+    return;
+  }
+  const label = button.textContent;
+  button.dataset.confirming = "true";
+  button.classList.add("confirming");
+  button.textContent = confirmLabel;
+  setTimeout(() => {
+    button.dataset.confirming = "false";
+    button.classList.remove("confirming");
+    button.textContent = label;
+  }, 3000);
 }
 
 function renderEvents(events) {
@@ -58,41 +85,43 @@ function renderEvents(events) {
     copyFromSelect.append(new Option(event.name, event.slug));
 
     const item = document.createElement("li");
-    item.className = "event-item";
+    item.className = "event-row";
 
     const info = document.createElement("div");
-    info.className = "event-info";
+    info.className = "event-row-info";
     const name = document.createElement("p");
-    name.className = "event-name";
+    name.className = "title-3";
     name.textContent = event.name;
     const meta = document.createElement("p");
-    meta.className = "event-meta";
-    meta.textContent = describeEvent(event);
+    meta.className = "caption-4 muted";
+    meta.textContent = `/${event.slug} · ${describeEvent(event)}`;
     info.append(name, meta);
 
     const actions = document.createElement("div");
-    actions.className = "event-actions";
+    actions.className = "event-row-actions";
 
-    const open = document.createElement("a");
-    open.className = "primary-button small-button events-link";
-    open.href = `/${event.slug}`;
-    open.textContent = "Open wheel";
+    const control = createLink("Open control", `/${event.slug}`, "primary", "ph-sliders-horizontal");
+    const display = createLink("Open display", `/${event.slug}/display`, "secondary", "ph-monitor");
+    display.target = "_blank";
+    display.rel = "noopener";
 
-    const copy = createButton("Copy link", "", async () => {
+    const copy = createButton("Copy display link", "quiet", async () => {
       try {
-        await navigator.clipboard.writeText(eventUrl(event.slug));
-        copy.textContent = "Copied";
+        await navigator.clipboard.writeText(displayUrl(event.slug));
+        copy.textContent = "Link copied";
       } catch {
-        copy.textContent = eventUrl(event.slug);
+        copy.textContent = displayUrl(event.slug);
       }
       setTimeout(() => {
-        copy.textContent = "Copy link";
-      }, 1500);
+        copy.textContent = "Copy display link";
+      }, 2000);
     });
 
-    const remove = createButton("Delete", "danger-button", () => deleteEvent(event));
+    const remove = createButton("Delete", "quiet", () =>
+      confirmClick(remove, "Click again to delete", () => deleteEvent(event))
+    );
 
-    actions.append(open, copy, remove);
+    actions.append(control, display, copy, remove);
     item.append(info, actions);
     eventList.append(item);
   });
@@ -106,14 +135,12 @@ async function loadEvents() {
     renderEvents(await response.json());
   } catch {
     emptyState.hidden = false;
-    emptyState.textContent = "Couldn't load events. Refresh to try again.";
+    eventList.replaceChildren();
+    emptyState.textContent = "Couldn't load events. Check your connection and refresh the page.";
   }
 }
 
 async function deleteEvent(event) {
-  if (!window.confirm(`Delete "${event.name}"? Its wheel link will stop working. The shared sheet is not affected.`)) {
-    return;
-  }
   await fetch(`/api/events/${encodeURIComponent(event.slug)}`, { method: "DELETE" });
   loadEvents();
 }

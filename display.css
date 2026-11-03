@@ -1,0 +1,300 @@
+/* Audience screen: nothing but the wheel, the prize and the winner. */
+
+:root {
+  --page: #f7efe4;
+  --text: #1f1a16;
+  --muted: #6e6157;
+  --card: rgba(255, 250, 243, 0.94);
+  --line: rgba(31, 26, 22, 0.1);
+  --scrim: rgba(31, 26, 22, 0.55);
+  --accent: #8f2b18;
+  --pointer: #8f2b18;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-theme="dark"] {
+  --text: #f2f2f2;
+  --muted: #9b9b9b;
+  --card: rgba(31, 31, 31, 0.94);
+  --line: #313131;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --accent: #e0703a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: "Manrope", sans-serif;
+  color: var(--text);
+  background-color: var(--page);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  -webkit-font-smoothing: antialiased;
+}
+
+body.hide-cursor {
+  cursor: none;
+}
+
+/* The wheel takes whatever space the prize banner leaves. */
+.display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3dvh;
+  height: 100dvh;
+  padding: 4dvh 4vw;
+}
+
+.wheel-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  container-type: size;
+}
+
+.wheel-stage {
+  position: relative;
+  width: min(100cqh, 100cqw);
+  aspect-ratio: 1;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 16px 32px rgba(31, 26, 22, 0.22));
+}
+
+.pointer-wrap {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--pointer-angle, 0deg))
+    translateY(calc(-1 * var(--pointer-distance, 0px)));
+}
+
+.pointer {
+  position: relative;
+  left: -24px;
+  top: -16px;
+  width: 48px;
+  height: 64px;
+  clip-path: polygon(50% 0%, 100% 40%, 50% 100%, 0% 40%);
+  background: var(--pointer);
+  filter: drop-shadow(0 8px 12px rgba(31, 26, 22, 0.3));
+}
+
+/* ---- Prize banner ---- */
+
+.prize-banner {
+  flex: none;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  max-width: calc(100vw - 48px);
+  padding: 16px 40px;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 16px 40px rgba(31, 26, 22, 0.18);
+  text-align: center;
+  animation: fade-in 500ms var(--ease);
+}
+
+.prize-banner-label {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#prize-banner-name {
+  font-size: 36px;
+  line-height: 40px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.prize-banner-detail {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.prize-banner-detail:empty {
+  display: none;
+}
+
+/* ---- Winner reveal ---- */
+
+.reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 48px;
+  background: var(--scrim);
+  animation: fade-in 500ms var(--ease);
+}
+
+.reveal[hidden] {
+  display: none;
+}
+
+.reveal-card {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  width: min(1200px, 100%);
+  padding: 64px 48px;
+  border-radius: 24px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  animation: rise-in 700ms var(--ease);
+}
+
+.reveal-header {
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.reveal-name {
+  margin: 0;
+  font-size: 128px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.reveal-name.long {
+  font-size: 96px;
+}
+
+.reveal-name.very-long {
+  font-size: 60px;
+}
+
+.reveal-prize {
+  margin: 0;
+  font-size: 36px;
+  line-height: 40px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.reveal-prize:empty {
+  display: none;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+}
+
+/* ---- Corner notes ---- */
+
+.corner-note {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--muted);
+  transition: opacity 500ms var(--ease);
+}
+
+.corner-note[hidden] {
+  display: none;
+}
+
+.corner-note.fading {
+  opacity: 0;
+}
+
+@media (max-width: 900px), (max-height: 600px) {
+  .reveal-name {
+    font-size: 60px;
+  }
+
+  .reveal-name.long,
+  .reveal-name.very-long {
+    font-size: 48px;
+  }
+
+  .reveal-prize,
+  #prize-banner-name {
+    font-size: 24px;
+    line-height: 32px;
+  }
+
+  .reveal-header {
+    font-size: 16px;
+    line-height: 24px;
+  }
+
+  .prize-banner {
+    padding: 8px 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal-card {
+    animation: fade-in 300ms linear;
+  }
+
+  .prize-banner {
+    animation: none;
+  }
+}

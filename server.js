@@ -20,7 +20,17 @@ const mimeTypes = {
 };
 
 // Only these files are served; everything else (server code, data) stays private.
-const publicFiles = new Set(["index.html", "events.html", "styles.css", "app.js", "events.js"]);
+const publicFiles = new Set([
+  "events.html",
+  "events.js",
+  "control.html",
+  "control.js",
+  "display.html",
+  "display.js",
+  "display.css",
+  "shared.js",
+  "styles.css",
+]);
 const slugPattern = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 const reservedSlugs = new Set(["api", "events"]);
 
@@ -256,8 +266,93 @@ function serveFile(res, fileName) {
   });
 }
 
+// ---- Live link between an event's control and display screens ----
+
+// slug -> Set of { res, role } for open streams.
+const liveClients = new Map();
+// slug -> the spin currently on screen (null once dismissed). Memory only.
+const liveStates = new Map();
+
+function sendStreamEvent(res, type, data) {
+  res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+function broadcast(slug, type, data) {
+  (liveClients.get(slug) || new Set()).forEach((client) => sendStreamEvent(client.res, type, data));
+}
+
+function broadcastDisplayCount(slug) {
+  const clients = liveClients.get(slug) || new Set();
+  const count = [...clients].filter((client) => client.role === "display").length;
+  broadcast(slug, "displays", { count });
+}
+
+function getLiveState(slug) {
+  const state = liveStates.get(slug);
+  return state ? { ...state, elapsedMs: Date.now() - state.receivedAt } : { type: "dismiss" };
+}
+
+function handleStream(req, res, slug) {
+  const role = new URL(req.url, "http://localhost").searchParams.get("role") || "display";
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-store",
+    Connection: "keep-alive",
+  });
+  res.write("retry: 2000\n\n");
+
+  const client = { res, role };
+  if (!liveClients.has(slug)) {
+    liveClients.set(slug, new Set());
+  }
+  liveClients.get(slug).add(client);
+  sendStreamEvent(res, "live", getLiveState(slug));
+  broadcastDisplayCount(slug);
+
+  // Proxies close idle connections, so send a comment every 25s.
+  const keepAlive = setInterval(() => res.write(": ping\n\n"), 25000);
+  req.on("close", () => {
+    clearInterval(keepAlive);
+    liveClients.get(slug)?.delete(client);
+    broadcastDisplayCount(slug);
+  });
+}
+
+async function handleLiveCommand(req, res, slug) {
+  const command = await readJsonBody(req);
+
+  if (command.type === "spin") {
+    const names = Array.isArray(command.names) ? command.names.map(String) : [];
+    const targetIndex = Number(command.targetIndex);
+    if (names.length < 2 || !Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= names.length) {
+      sendJson(res, 400, { error: "A spin needs at least 2 names and a valid target." });
+      return;
+    }
+    const spin = {
+      type: "spin",
+      spinId: String(command.spinId || Date.now()),
+      names,
+      targetIndex,
+      durationMs: Math.min(30000, Math.max(1000, Number(command.durationMs) || 7000)),
+      winner: names[targetIndex],
+      prize: String(command.prize || ""),
+      header: String(command.header || ""),
+      receivedAt: Date.now(),
+    };
+    liveStates.set(slug, spin);
+    broadcast(slug, "live", { ...spin, elapsedMs: 0 });
+  } else {
+    liveStates.delete(slug);
+    broadcast(slug, "live", { type: "dismiss" });
+  }
+
+  sendJson(res, 200, { ok: true });
+}
+
 async function handleEventsApi(req, res, pathname) {
-  const slug = pathname.split("/")[3] ? decodeURIComponent(pathname.split("/")[3]) : "";
+  const parts = pathname.split("/");
+  const slug = parts[3] ? decodeURIComponent(parts[3]) : "";
+  const action = parts[4] || "";
 
   if (!slug) {
     if (req.method === "GET") {
@@ -312,6 +407,21 @@ async function handleEventsApi(req, res, pathname) {
     return;
   }
 
+  if (action === "stream" && req.method === "GET") {
+    handleStream(req, res, slug);
+    return;
+  }
+
+  if (action === "live" && req.method === "POST") {
+    await handleLiveCommand(req, res, slug);
+    return;
+  }
+
+  if (action) {
+    sendJson(res, 404, { error: "Not found" });
+    return;
+  }
+
   if (req.method === "GET") {
     sendJson(res, 200, event);
     return;
@@ -321,6 +431,7 @@ async function handleEventsApi(req, res, pathname) {
     const changes = await readJsonBody(req);
     writeEvent(applyEventChanges(event, changes));
     sendJson(res, 200, { updatedAt: event.updatedAt });
+    broadcast(slug, "updated", { updatedAt: event.updatedAt });
     return;
   }
 
@@ -375,10 +486,10 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // /<event-slug> opens that event's wheel.
-  const slug = fileName.replace(/\/$/, "").toLowerCase();
-  if (readEvent(slug)) {
-    serveFile(res, "index.html");
+  // /<event-slug> is the control screen; /<event-slug>/display is the audience screen.
+  const [slug, screen = "", ...rest] = fileName.replace(/\/$/, "").toLowerCase().split("/");
+  if (rest.length === 0 && (screen === "" || screen === "display") && readEvent(slug)) {
+    serveFile(res, screen === "display" ? "display.html" : "control.html");
     return;
   }
 

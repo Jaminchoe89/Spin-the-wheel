@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Display · Spin the Wheel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/display.css" />
+  </head>
+  <body>
+    <main class="display">
+      <div class="wheel-area">
+        <div class="wheel-stage" id="wheel-stage">
+          <div class="pointer-wrap" id="pointer-wrap"><div class="pointer"></div></div>
+          <canvas id="wheel" width="1200" height="1200" aria-label="Prize wheel"></canvas>
+        </div>
+      </div>
+
+      <div id="prize-banner" class="prize-banner" hidden aria-live="polite">
+        <span class="prize-banner-label">Now spinning for</span>
+        <strong id="prize-banner-name"></strong>
+        <span id="prize-banner-detail" class="prize-banner-detail"></span>
+      </div>
+    </main>
+
+    <div id="reveal" class="reveal" hidden aria-live="assertive">
+      <div class="reveal-card">
+        <span id="reveal-header" class="reveal-header">Winner</span>
+        <p id="reveal-name" class="reveal-name"></p>
+        <p id="reveal-prize" class="reveal-prize"></p>
+      </div>
+    </div>
+
+    <p id="fullscreen-hint" class="corner-note" hidden>Click anywhere for full screen</p>
+    <p id="connection-note" class="corner-note" hidden>Reconnecting to control…</p>
+
+    <script src="/shared.js"></script>
+    <script src="/display.js"></script>
+  </body>
+</html>
