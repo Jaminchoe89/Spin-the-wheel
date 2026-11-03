@@ -66,6 +66,31 @@ function updatePointer() {
   drawWheel();
 }
 
+// WCAG relative luminance of a #rrggbb colour.
+function luminance(hex) {
+  const value = parseInt(String(hex).replace("#", "").slice(0, 6), 16) || 0;
+  const channel = (shift) => {
+    const c = ((value >> shift) & 255) / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0);
+}
+
+function contrastRatio(first, second) {
+  const [light, dark] = [luminance(first), luminance(second)].sort((a, b) => b - a);
+  return (light + 0.05) / (dark + 0.05);
+}
+
+// Keeps the chosen name colour unless it would be hard to read on this slice
+// (e.g. white on a pale slice); then uses whichever of dark or white reads better.
+const MIN_NAME_CONTRAST = 3; // WCAG minimum for large bold text
+function readableNameColor(sliceColor) {
+  if (contrastRatio(settings.textColor, sliceColor) >= MIN_NAME_CONTRAST) {
+    return settings.textColor;
+  }
+  return contrastRatio("#1f1a16", sliceColor) >= contrastRatio("#ffffff", sliceColor) ? "#1f1a16" : "#ffffff";
+}
+
 function fitFontSize(text, baseSize, minSize, maxWidth) {
   for (let size = baseSize; size > minSize; size -= 1) {
     faceCtx.font = `700 ${size}px Manrope`;
@@ -138,7 +163,8 @@ function drawFace() {
     faceCtx.rotate(startAngle + arc / 2);
     faceCtx.translate(textRadius, 0);
     faceCtx.textAlign = "right";
-    faceCtx.fillStyle = settings.textColor;
+    const sliceColor = settings.palette[index % settings.palette.length];
+    faceCtx.fillStyle = wheelImage ? settings.textColor : readableNameColor(sliceColor);
     if (wheelImage) {
       faceCtx.shadowColor = "rgba(31, 26, 22, 0.5)";
       faceCtx.shadowBlur = 20;
@@ -148,6 +174,14 @@ function drawFace() {
     const largest = Math.round(Math.min(radius * 0.085, sliceThickness));
     const fontSize = fitFontSize(name, largest, Math.min(Math.round(radius * 0.024), largest), maxTextWidth);
     faceCtx.font = `700 ${fontSize}px Manrope`;
+    if (wheelImage) {
+      // A photo can be light anywhere, so outline names to keep them readable on it.
+      const outlineLight = luminance(settings.textColor) < 0.4;
+      faceCtx.strokeStyle = outlineLight ? "rgba(255, 255, 255, 0.85)" : "rgba(20, 17, 15, 0.75)";
+      faceCtx.lineWidth = Math.max(2, fontSize * 0.14);
+      faceCtx.lineJoin = "round";
+      faceCtx.strokeText(name, 0, fontSize * 0.34);
+    }
     faceCtx.fillText(name, 0, fontSize * 0.34);
     faceCtx.restore();
   });
