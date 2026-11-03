@@ -18,6 +18,7 @@ const resultHeadline = $("result-headline");
 const resultDetail = $("result-detail");
 const resultActions = $("result-actions");
 const removeWinnerButton = $("remove-winner");
+const removeAndSpinButton = $("remove-and-spin");
 const voidDrawButton = $("void-draw");
 const dismissResultButton = $("dismiss-result");
 
@@ -532,7 +533,7 @@ async function dismissResult() {
 
 function removeWinner() {
   if (phase !== "result" || !lastResult) {
-    return;
+    return Promise.resolve();
   }
   const names = parseNames();
   const index = names.indexOf(lastResult.winner);
@@ -541,7 +542,16 @@ function removeWinner() {
   }
   removedNames.push(lastResult.winner);
   setNames(names);
-  dismissResult();
+  return dismissResult();
+}
+
+// Waits for the display to clear the result first, so the new spin isn't cancelled by it.
+async function removeAndSpinAgain() {
+  if (phase !== "result") {
+    return;
+  }
+  await removeWinner();
+  spin();
 }
 
 function voidDraw() {
@@ -734,6 +744,7 @@ function isTyping(target) {
 
 spinButton.addEventListener("click", spin);
 removeWinnerButton.addEventListener("click", removeWinner);
+removeAndSpinButton.addEventListener("click", removeAndSpinAgain);
 voidDrawButton.addEventListener("click", voidDraw);
 dismissResultButton.addEventListener("click", dismissResult);
 prevPrizeButton.addEventListener("click", () => setCurrentPrize(currentPrizeIndex - 1));
@@ -795,6 +806,8 @@ document.addEventListener("keydown", (event) => {
   if (key === " ") {
     event.preventDefault();
     spin();
+  } else if (key === "enter" && !event.target.closest?.("button, a")) {
+    removeAndSpinAgain();
   } else if (key === "r") {
     removeWinner();
   } else if (key === "v") {
