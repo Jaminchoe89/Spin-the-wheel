@@ -72,15 +72,12 @@ const lookStatus = $("look-status");
 
 const eventSlug = decodeURIComponent(window.location.pathname.split("/")[1] || "").toLowerCase();
 const eventApiUrl = `/api/events/${encodeURIComponent(eventSlug)}`;
-const sheetPollIntervalMs = 5000;
 const saveDelayMs = 600;
 const sheetHelpText = sheetStatus.textContent;
 
 let settings = normalizeSettings(null);
 let sheetUrl = "";
-let sheetPollTimer = null;
-let sheetFetchInFlight = false;
-// Winners taken off the wheel; a synced sheet won't add them back.
+// Winners taken off the wheel; the server won't add them back from the sheet.
 let removedNames = [];
 let prizes = [];
 let currentPrizeIndex = 0;
@@ -109,7 +106,8 @@ async function saveEvent() {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        names: parseNames(),
+        // While a sheet is connected the server owns the names list.
+        ...(sheetUrl ? {} : { names: parseNames() }),
         removedNames,
         sheetUrl,
         prizesText: prizesInput.value,
@@ -170,17 +168,6 @@ function rowsFromWorkbookData(data, isCsv) {
   return window.XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false });
 }
 
-function withoutRemoved(names) {
-  const remaining = [...names];
-  removedNames.forEach((removed) => {
-    const index = remaining.indexOf(removed);
-    if (index !== -1) {
-      remaining.splice(index, 1);
-    }
-  });
-  return remaining;
-}
-
 async function handleFileImport() {
   const [file] = fileInput.files || [];
   if (!file) {
@@ -194,54 +181,43 @@ async function handleFileImport() {
   fileInput.value = "";
 }
 
-async function pollSheet() {
-  // Never change names mid spin; the next poll picks the change up.
-  if (!sheetUrl || sheetFetchInFlight || phase === "spinning") {
+// The server reads the sheet every 5 seconds and pushes new names to every screen.
+async function refreshSheetNames() {
+  if (!sheetUrl || phase === "starting" || phase === "spinning") {
     return;
   }
-  sheetFetchInFlight = true;
-  const requestedUrl = sheetUrl;
-
   try {
-    const response = await fetch(`/api/sheet?url=${encodeURIComponent(requestedUrl)}`, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error(await response.text());
+    const response = await fetch(eventApiUrl, { cache: "no-store" });
+    const event = await response.json();
+    if (sheetUrl && event.sheetUrl === sheetUrl && phase !== "starting" && phase !== "spinning") {
+      namesInput.value = (event.names || []).join("\n");
+      renderNamesMeta();
     }
-    const isCsv = (response.headers.get("content-type") || "").includes("csv");
-    const data = new Uint8Array(await response.arrayBuffer());
-    if (requestedUrl !== sheetUrl || phase === "spinning") {
-      return;
-    }
-    const names = withoutRemoved(normalizeImportedNames(rowsFromWorkbookData(data, isCsv)));
-    if (names.join("\n") !== parseNames().join("\n")) {
-      setNames(names);
-    }
-    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    sheetStatus.textContent = `Connected. ${names.length} names, checked at ${time}.`;
-  } catch (error) {
-    if (requestedUrl === sheetUrl) {
-      sheetStatus.textContent = error.message || "Couldn't reach the sheet. Retrying in 5 seconds.";
-    }
-  } finally {
-    sheetFetchInFlight = false;
+  } catch {
+    // The next update brings the names in.
   }
 }
 
+function renderSheetStatus(status) {
+  if (!sheetUrl) {
+    return;
+  }
+  const time = new Date(status.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  sheetStatus.textContent = status.ok
+    ? `Connected. ${status.count} names, checked at ${time}. Updates every 5 seconds.`
+    : status.error;
+}
+
 function startSheetSync(url) {
-  clearInterval(sheetPollTimer);
   sheetUrl = url;
   sheetUrlInput.value = url;
   namesInput.readOnly = true;
   sheetSyncButton.textContent = "Disconnect";
   sheetStatus.textContent = "Connecting to the sheet";
   renderNamesMeta();
-  pollSheet();
-  sheetPollTimer = setInterval(pollSheet, sheetPollIntervalMs);
 }
 
 function stopSheetSync() {
-  clearInterval(sheetPollTimer);
-  sheetPollTimer = null;
   sheetUrl = "";
   namesInput.readOnly = false;
   sheetSyncButton.textContent = "Connect";
@@ -272,7 +248,6 @@ function restoreRemoved() {
   removedNames = [];
   renderNamesMeta();
   scheduleSave();
-  pollSheet();
 }
 
 // ---- Prizes ----
@@ -833,5 +808,9 @@ document.addEventListener("keydown", (event) => {
 
 openDisplayLink.href = `/${encodeURIComponent(eventSlug)}/display`;
 previewFrame.src = `/${encodeURIComponent(eventSlug)}/display?preview=1`;
-connectToEvent(eventSlug, "control", { displays: renderDisplayCount });
+connectToEvent(eventSlug, "control", {
+  displays: renderDisplayCount,
+  updated: refreshSheetNames,
+  sheet: renderSheetStatus,
+});
 loadEvent();

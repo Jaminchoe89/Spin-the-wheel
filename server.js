@@ -2,6 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const XLSX = require("xlsx");
 
 const root = __dirname;
 const port = process.env.PORT || 3000;
@@ -78,40 +79,39 @@ function resolveSheetDownloadUrl(rawUrl) {
   return url.toString();
 }
 
-async function handleSheetRequest(req, res) {
-  const requestUrl = new URL(req.url, "http://localhost");
-  const downloadUrl = resolveSheetDownloadUrl(requestUrl.searchParams.get("url") || "");
-
+// Reads the first column of a shared sheet. Throws with a message the operator can act on.
+async function fetchSheetNames(rawUrl) {
+  const downloadUrl = resolveSheetDownloadUrl(rawUrl);
   if (!downloadUrl) {
-    res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end("Unsupported sheet link. Use a Google Sheets or OneDrive/SharePoint share link.");
-    return;
+    throw new Error("Unsupported sheet link. Use a Google Sheets or OneDrive/SharePoint share link.");
   }
 
+  let upstream;
   try {
-    const upstream = await fetch(downloadUrl, {
-      redirect: "follow",
-      signal: AbortSignal.timeout(10000),
-    });
-    const contentType = upstream.headers.get("content-type") || "";
-
-    // A sign-in page instead of a file means the sheet isn't shared publicly.
-    if (!upstream.ok || contentType.includes("text/html")) {
-      res.writeHead(502, { "Content-Type": "text/plain; charset=utf-8" });
-      res.end("Couldn't read the sheet. Make sure it's shared as \"Anyone with the link\".");
-      return;
-    }
-
-    const body = Buffer.from(await upstream.arrayBuffer());
-    res.writeHead(200, {
-      "Content-Type": contentType || "application/octet-stream",
-      "Cache-Control": "no-store",
-    });
-    res.end(body);
+    upstream = await fetch(downloadUrl, { redirect: "follow", signal: AbortSignal.timeout(10000) });
   } catch {
-    res.writeHead(504, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end("Timed out reading the sheet.");
+    throw new Error("Couldn't reach the sheet. Retrying in 5 seconds.");
   }
+  const contentType = upstream.headers.get("content-type") || "";
+  // A sign-in page instead of a file means the sheet isn't shared publicly.
+  if (!upstream.ok || contentType.includes("text/html")) {
+    throw new Error("Couldn't read the sheet. Make sure it's shared as \"Anyone with the link\".");
+  }
+
+  const data = Buffer.from(await upstream.arrayBuffer());
+  const workbook = contentType.includes("csv")
+    ? XLSX.read(data.toString("utf8"), { type: "string" })
+    : XLSX.read(data, { type: "buffer" });
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, raw: false });
+
+  const values = rows
+    .map((row) => (Array.isArray(row) ? row[0] : row))
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+  if (values.length > 0 && /\bnames?\b/i.test(values[0])) {
+    values.shift();
+  }
+  return values;
 }
 
 // ---- Event storage: one JSON file per event ----
@@ -262,7 +262,11 @@ function serveFile(res, fileName) {
       res.end("Server error");
       return;
     }
-    res.writeHead(200, { "Content-Type": mimeTypes[path.extname(fileName)] || "application/octet-stream" });
+    // no-cache: browsers check for a newer version each load, so deploys show up without a hard refresh.
+    res.writeHead(200, {
+      "Content-Type": mimeTypes[path.extname(fileName)] || "application/octet-stream",
+      "Cache-Control": "no-cache",
+    });
     res.end(data);
   });
 }
@@ -293,6 +297,81 @@ function getLiveState(slug) {
   return state ? { ...state, elapsedMs: Date.now() - state.receivedAt } : { type: "dismiss" };
 }
 
+// ---- Live sheet: the server reads each open event's sheet and pushes changes ----
+
+const sheetPollIntervalMs = 5000;
+// slug -> { url, names, status, inFlight } for the last read of that event's sheet.
+const sheetCache = new Map();
+
+function withoutRemoved(names, removedNames) {
+  const remaining = [...names];
+  removedNames.forEach((removed) => {
+    const index = remaining.indexOf(removed);
+    if (index !== -1) {
+      remaining.splice(index, 1);
+    }
+  });
+  return remaining;
+}
+
+function isSpinning(slug) {
+  const state = liveStates.get(slug);
+  return Boolean(state) && Date.now() < state.receivedAt + state.durationMs;
+}
+
+// Puts the latest sheet names (minus removed winners) on the event. Returns true if they changed.
+function applySheetNames(event) {
+  const cache = sheetCache.get(event.slug);
+  if (!event.sheetUrl || !cache?.names || cache.url !== event.sheetUrl) {
+    return false;
+  }
+  const names = withoutRemoved(cache.names, event.removedNames);
+  if (names.join("\n") === event.names.join("\n")) {
+    return false;
+  }
+  event.names = names;
+  return true;
+}
+
+async function pollSheet(slug) {
+  const event = readEvent(slug);
+  const cache = sheetCache.get(slug) || {};
+  // Never change the names mid spin; the next poll picks the change up.
+  if (!event?.sheetUrl || cache.inFlight || isSpinning(slug)) {
+    return;
+  }
+  cache.inFlight = true;
+  sheetCache.set(slug, cache);
+  const url = event.sheetUrl;
+
+  try {
+    const names = await fetchSheetNames(url);
+    cache.url = url;
+    cache.names = names;
+    // Re-read: the operator may have saved changes while the sheet was loading.
+    const latest = readEvent(slug);
+    if (latest?.sheetUrl === url && !isSpinning(slug) && applySheetNames(latest)) {
+      latest.updatedAt = new Date().toISOString();
+      writeEvent(latest);
+      broadcast(slug, "updated", { updatedAt: latest.updatedAt });
+    }
+    cache.status = { ok: true, count: (latest || event).names.length, checkedAt: new Date().toISOString() };
+  } catch (error) {
+    cache.status = { ok: false, error: error.message, checkedAt: new Date().toISOString() };
+  } finally {
+    cache.inFlight = false;
+    broadcast(slug, "sheet", cache.status);
+  }
+}
+
+setInterval(() => {
+  liveClients.forEach((clients, slug) => {
+    if (clients.size > 0) {
+      pollSheet(slug);
+    }
+  });
+}, sheetPollIntervalMs);
+
 function handleStream(req, res, slug) {
   const role = new URL(req.url, "http://localhost").searchParams.get("role") || "display";
   res.writeHead(200, {
@@ -308,7 +387,11 @@ function handleStream(req, res, slug) {
   }
   liveClients.get(slug).add(client);
   sendStreamEvent(res, "live", getLiveState(slug));
+  if (sheetCache.get(slug)?.status) {
+    sendStreamEvent(res, "sheet", sheetCache.get(slug).status);
+  }
   broadcastDisplayCount(slug);
+  pollSheet(slug);
 
   // Proxies close idle connections, so send a comment every 25s.
   const keepAlive = setInterval(() => res.write(": ping\n\n"), 25000);
@@ -430,14 +513,27 @@ async function handleEventsApi(req, res, pathname) {
 
   if (req.method === "PUT") {
     const changes = await readJsonBody(req);
-    writeEvent(applyEventChanges(event, changes));
+    const previousSheetUrl = event.sheetUrl;
+    const nextSheetUrl = typeof changes.sheetUrl === "string" ? changes.sheetUrl.trim() : event.sheetUrl;
+    // While a sheet is connected the server owns the names list.
+    if (nextSheetUrl) {
+      delete changes.names;
+    }
+    applyEventChanges(event, changes);
+    applySheetNames(event);
+    writeEvent(event);
     sendJson(res, 200, { updatedAt: event.updatedAt });
     broadcast(slug, "updated", { updatedAt: event.updatedAt });
+    if (event.sheetUrl && event.sheetUrl !== previousSheetUrl) {
+      pollSheet(slug);
+    }
     return;
   }
 
   if (req.method === "DELETE") {
     fs.unlinkSync(eventFilePath(slug));
+    sheetCache.delete(slug);
+    liveStates.delete(slug);
     sendJson(res, 200, { deleted: slug });
     return;
   }
@@ -462,11 +558,6 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
-    if (pathname === "/api/sheet") {
-      await handleSheetRequest(req, res);
-      return;
-    }
-
     if (pathname === "/api/events" || pathname.startsWith("/api/events/")) {
       await handleEventsApi(req, res, pathname);
       return;
