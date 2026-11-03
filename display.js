@@ -366,6 +366,7 @@ source.addEventListener("error", () => {
 });
 
 if (!isPreview) {
+  wheelSounds.loadWinnerSound("/winner.mp3");
   fullscreenHint.hidden = false;
   setTimeout(() => fullscreenHint.classList.add("fading"), 6000);
   setTimeout(() => {

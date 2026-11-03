@@ -18,6 +18,7 @@ const mimeTypes = {
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml; charset=utf-8",
+  ".mp3": "audio/mpeg",
 };
 
 // Only these files are served; everything else (server code, data) stays private.
@@ -31,6 +32,7 @@ const publicFiles = new Set([
   "display.css",
   "shared.js",
   "sounds.js",
+  "winner.mp3",
   "styles.css",
 ]);
 const slugPattern = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;

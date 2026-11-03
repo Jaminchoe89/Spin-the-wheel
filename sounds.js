@@ -1,4 +1,5 @@
-// Wheel sounds, synthesised in the browser: no audio files or external services.
+// Wheel sounds: ticks are synthesised in the browser; the winner sound is winner.mp3,
+// with a synthesised chime as the fallback.
 // Browsers keep audio locked until the page is clicked, so call unlock() from a click.
 
 const wheelSounds = (() => {
@@ -6,6 +7,8 @@ const wheelSounds = (() => {
   let master = null;
   let noise = null;
   let lastTickAt = 0;
+  let winnerAudio = null;
+  let winnerBuffer = null;
 
   function ensureContext() {
     if (!context) {
@@ -37,7 +40,31 @@ const wheelSounds = (() => {
     if (ctx && ctx.state !== "running") {
       await ctx.resume().catch(() => {});
     }
+    decodeWinnerSound();
     return isUnlocked();
+  }
+
+  // Fetches the winner sound file up front so it plays the instant the result shows.
+  async function loadWinnerSound(url) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        winnerAudio = await response.arrayBuffer();
+        decodeWinnerSound();
+      }
+    } catch {
+      // Falls back to the built-in chime.
+    }
+  }
+
+  // Decoding needs an audio context, which only exists after the first click.
+  async function decodeWinnerSound() {
+    if (!context || !winnerAudio || winnerBuffer) {
+      return;
+    }
+    const encoded = winnerAudio;
+    winnerAudio = null;
+    winnerBuffer = await context.decodeAudioData(encoded).catch(() => null);
   }
 
   // One peg passing the pointer. Speed (0 to 1) makes fast ticks lighter and higher.
@@ -92,11 +119,23 @@ const wheelSounds = (() => {
     oscillator.stop(start + duration + 0.05);
   }
 
-  // A rising arpeggio into a held major chord, with a little sparkle on top.
+  // Plays the winner sound file, or the built-in chime if it isn't available.
   function fanfare() {
     if (!isUnlocked()) {
       return;
     }
+    if (winnerBuffer) {
+      const source = context.createBufferSource();
+      source.buffer = winnerBuffer;
+      source.connect(master);
+      source.start();
+      return;
+    }
+    chime();
+  }
+
+  // A rising arpeggio into a held major chord, with a little sparkle on top.
+  function chime() {
     const now = context.currentTime + 0.02;
     const arpeggio = [523.25, 659.25, 783.99, 1046.5];
     arpeggio.forEach((frequency, index) => {
@@ -115,5 +154,5 @@ const wheelSounds = (() => {
     }
   }
 
-  return { unlock, isUnlocked, tick, fanfare };
+  return { unlock, isUnlocked, loadWinnerSound, tick, fanfare };
 })();
