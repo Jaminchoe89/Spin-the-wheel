@@ -61,6 +61,7 @@ body.hide-cursor {
 }
 
 .wheel-area {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
@@ -94,8 +95,7 @@ canvas {
   display: block;
 }
 
-.wheel-3d #wheel,
-.wheel-3d .pointer-wrap {
+.wheel-3d .wheel-stage {
   display: none;
 }
 

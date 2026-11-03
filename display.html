@@ -12,11 +12,12 @@
   </head>
   <body>
     <main class="display">
-      <div class="wheel-area">
+      <div class="wheel-area" id="wheel-area">
+        <!-- The 3D view spans the whole area so the close-up can use the full screen width. -->
+        <canvas id="wheel-3d" aria-hidden="true"></canvas>
         <div class="wheel-stage" id="wheel-stage">
           <div class="pointer-wrap" id="pointer-wrap"><div class="pointer"></div></div>
           <canvas id="wheel" width="1200" height="1200" aria-label="Prize wheel"></canvas>
-          <canvas id="wheel-3d" aria-hidden="true"></canvas>
         </div>
       </div>
 

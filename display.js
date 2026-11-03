@@ -10,6 +10,7 @@ faceCanvas.width = 2048;
 faceCanvas.height = 2048;
 const faceCtx = faceCanvas.getContext("2d");
 const wheelStage = document.getElementById("wheel-stage");
+const wheelArea = document.getElementById("wheel-area");
 const pointerWrap = document.getElementById("pointer-wrap");
 const prizeBanner = document.getElementById("prize-banner");
 const prizeBannerName = document.getElementById("prize-banner-name");
@@ -25,6 +26,10 @@ const soundNote = document.getElementById("sound-note");
 const eventSlug = decodeURIComponent(window.location.pathname.split("/")[1] || "").toLowerCase();
 const isPreview = new URLSearchParams(window.location.search).has("preview");
 const idleRotationSpeed = 0.0024;
+// With this many names the slices are too thin to read, so the end of each spin zooms in.
+const ZOOM_MIN_NAMES = 25;
+const LANDED_HOLD_MS = 1000; // time to see the landed name in close-up before the reveal
+const HIGH_RES_NAMES = 60; // above this the face is drawn at double resolution
 
 let settings = normalizeSettings(null);
 let names = [];
@@ -37,6 +42,7 @@ let wheelImage = null;
 let wheelImageSource = "";
 let cursorTimer = null;
 let faceDirty = true;
+let zoom = 0; // 0 = whole wheel, 1 = close-up at the pointer
 let disconnectTimer = null;
 
 // ---- Drawing ----
@@ -56,7 +62,7 @@ function updatePointer() {
   pointerWrap.style.setProperty("--pointer-angle", `${(settings.pointerClockHour % 12) * 30}deg`);
   document.documentElement.style.setProperty("--pointer", settings.arrowColor);
   renderer.setPointer(settings.pointerClockHour, settings.arrowColor);
-  renderer.resize(wheelStage.clientWidth);
+  renderer.resize(wheelArea.clientWidth, wheelArea.clientHeight);
   drawWheel();
 }
 
@@ -72,6 +78,11 @@ function fitFontSize(text, baseSize, minSize, maxWidth) {
 
 // Draws the unrotated wheel face edge to edge on faceCanvas.
 function drawFace() {
+  const resolution = names.length > HIGH_RES_NAMES ? 4096 : 2048;
+  if (faceCanvas.width !== resolution) {
+    faceCanvas.width = resolution;
+    faceCanvas.height = resolution;
+  }
   const size = faceCanvas.width;
   const radius = size / 2;
   faceCtx.clearRect(0, 0, size, size);
@@ -132,10 +143,26 @@ function drawFace() {
       faceCtx.shadowColor = "rgba(31, 26, 22, 0.5)";
       faceCtx.shadowBlur = 20;
     }
-    const fontSize = fitFontSize(name, Math.round(radius * 0.085), Math.round(radius * 0.024), maxTextWidth);
+    // Never taller than the slice is thick, so neighbouring names don't overlap.
+    const sliceThickness = 2 * Math.sin(arc / 2) * textRadius * 0.62;
+    const largest = Math.round(Math.min(radius * 0.085, sliceThickness));
+    const fontSize = fitFontSize(name, largest, Math.min(Math.round(radius * 0.024), largest), maxTextWidth);
     faceCtx.font = `700 ${fontSize}px Manrope`;
     faceCtx.fillText(name, 0, fontSize * 0.34);
     faceCtx.restore();
+  });
+
+  // Fine dividers between slices. They start away from the centre and fade with
+  // long lists, where they would otherwise bunch up into a white haze.
+  faceCtx.strokeStyle = `rgba(255, 255, 255, ${Math.min(0.35, (0.35 * 40) / names.length)})`;
+  faceCtx.lineWidth = Math.max(1, radius * 0.004 * Math.min(1, 40 / names.length));
+  names.forEach((_, index) => {
+    const x = Math.cos(index * arc);
+    const y = Math.sin(index * arc);
+    faceCtx.beginPath();
+    faceCtx.moveTo(x * radius * 0.2, y * radius * 0.2);
+    faceCtx.lineTo(x * radius, y * radius);
+    faceCtx.stroke();
   });
 
   faceCtx.restore();
@@ -166,7 +193,11 @@ function drawWheel() {
     drawFace();
     renderer.setFace(names.length);
   }
-  renderer.render(rotation);
+  renderer.render(rotation, zoom);
+}
+
+function zoomsForNames() {
+  return Boolean(renderer.canZoom) && names.length >= ZOOM_MIN_NAMES;
 }
 
 function setNames(next) {
@@ -203,6 +234,7 @@ function startIdleSpin() {
   }
   const tick = () => {
     rotation = normalizeAngle(rotation + idleRotationSpeed);
+    zoom = Math.max(0, zoom - 0.02); // glide back out to the whole wheel
     drawWheel();
     idleAnimationId = requestAnimationFrame(tick);
   };
@@ -225,6 +257,7 @@ function playSpin(spin) {
   if (remainingMs <= 0) {
     // Joined after the spin finished: jump straight to the result.
     rotation = rotationForTarget(names.length, spin.targetIndex);
+    zoom = 0;
     drawWheel();
     showReveal(spin);
     return;
@@ -236,6 +269,12 @@ function playSpin(spin) {
   const startRotation = rotation;
   const extraRotation = rounds * Math.PI * 2 + normalizeAngle(target - normalizeAngle(rotation));
   const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
+  const smoothstep = (from, to, t) => {
+    const x = Math.min(Math.max((t - from) / (to - from), 0), 1);
+    return x * x * (3 - 2 * x);
+  };
+  const startZoom = zoom;
+  const zooming = zoomsForNames();
   const sliceAngle = (Math.PI * 2) / names.length;
   const sliceUnderPointer = () => Math.floor(normalizeAngle(getPointerWorldAngle() - rotation) / sliceAngle);
   let lastSlice = sliceUnderPointer();
@@ -247,6 +286,9 @@ function playSpin(spin) {
     }
     const progress = Math.min((timestamp - startTime) / remainingMs, 1);
     rotation = startRotation + extraRotation * easeOutQuint(progress);
+    // Leave any earlier close-up quickly, then move in as the wheel slows down.
+    const zoomIn = zooming ? smoothstep(0.42, 0.72, progress) : 0;
+    zoom = Math.max(zoomIn, startZoom * Math.max(0, 1 - progress / 0.12));
     drawWheel();
 
     // Tick whenever a new slice reaches the pointer; ticks slow as the wheel does.
@@ -262,15 +304,38 @@ function playSpin(spin) {
       spinAnimationId = requestAnimationFrame(frame);
       return;
     }
-    spinAnimationId = null;
-    if (currentSpinId === spin.spinId) {
-      showReveal(spin);
-      if (soundOn()) {
-        wheelSounds.fanfare();
-      }
+    if (zooming) {
+      holdOnLanding(spin);
+      return;
     }
+    spinAnimationId = null;
+    finishSpin(spin);
   };
   spinAnimationId = requestAnimationFrame(frame);
+}
+
+function finishSpin(spin) {
+  if (currentSpinId === spin.spinId) {
+    showReveal(spin);
+    if (soundOn()) {
+      wheelSounds.fanfare();
+    }
+  }
+}
+
+// Keeps the close-up on the landed name for a moment (the flapper settles) before the reveal.
+function holdOnLanding(spin) {
+  const holdUntil = performance.now() + LANDED_HOLD_MS;
+  const hold = (timestamp) => {
+    drawWheel();
+    if (timestamp < holdUntil && currentSpinId === spin.spinId) {
+      spinAnimationId = requestAnimationFrame(hold);
+      return;
+    }
+    spinAnimationId = null;
+    finishSpin(spin);
+  };
+  spinAnimationId = requestAnimationFrame(hold);
 }
 
 function showReveal(spin) {
@@ -444,7 +509,9 @@ if (!isPreview) {
 }
 
 // The wheel resizes when the prize banner comes and goes, not just with the window.
-new ResizeObserver(updatePointer).observe(wheelStage);
+const sizeWatcher = new ResizeObserver(updatePointer);
+sizeWatcher.observe(wheelStage);
+sizeWatcher.observe(wheelArea);
 document.fonts.ready.then(() => {
   faceDirty = true;
   drawWheel();
