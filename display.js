@@ -3,6 +3,12 @@
 
 const canvas = document.getElementById("wheel");
 const ctx = canvas.getContext("2d");
+const canvas3d = document.getElementById("wheel-3d");
+// The wheel face is drawn once per change here, then turned by the renderer each frame.
+const faceCanvas = document.createElement("canvas");
+faceCanvas.width = 2048;
+faceCanvas.height = 2048;
+const faceCtx = faceCanvas.getContext("2d");
 const wheelStage = document.getElementById("wheel-stage");
 const pointerWrap = document.getElementById("pointer-wrap");
 const prizeBanner = document.getElementById("prize-banner");
@@ -30,6 +36,7 @@ let refreshPending = false;
 let wheelImage = null;
 let wheelImageSource = "";
 let cursorTimer = null;
+let faceDirty = true;
 let disconnectTimer = null;
 
 // ---- Drawing ----
@@ -48,92 +55,139 @@ function updatePointer() {
   pointerWrap.style.setProperty("--pointer-distance", `${distance}px`);
   pointerWrap.style.setProperty("--pointer-angle", `${(settings.pointerClockHour % 12) * 30}deg`);
   document.documentElement.style.setProperty("--pointer", settings.arrowColor);
+  renderer.setPointer(settings.pointerClockHour, settings.arrowColor);
+  renderer.resize(wheelStage.clientWidth);
+  drawWheel();
 }
 
 function fitFontSize(text, baseSize, minSize, maxWidth) {
   for (let size = baseSize; size > minSize; size -= 1) {
-    ctx.font = `700 ${size}px Manrope`;
-    if (ctx.measureText(text).width <= maxWidth) {
+    faceCtx.font = `700 ${size}px Manrope`;
+    if (faceCtx.measureText(text).width <= maxWidth) {
       return size;
     }
   }
   return minSize;
 }
 
-function drawWheel(wheelNames = names) {
-  const size = canvas.width;
+// Draws the unrotated wheel face edge to edge on faceCanvas.
+function drawFace() {
+  const size = faceCanvas.width;
   const radius = size / 2;
-  ctx.clearRect(0, 0, size, size);
+  faceCtx.clearRect(0, 0, size, size);
+  faceCtx.save();
+  faceCtx.translate(radius, radius);
 
-  if (wheelNames.length === 0) {
-    ctx.save();
-    ctx.translate(radius, radius);
-    ctx.beginPath();
-    ctx.arc(0, 0, radius - 24, 0, Math.PI * 2);
-    ctx.fillStyle = settings.appTheme === "dark" ? "#272727" : "rgba(255, 252, 247, 0.9)";
-    ctx.fill();
-    ctx.fillStyle = settings.appTheme === "dark" ? "#9b9b9b" : "#6e6157";
-    ctx.font = "600 56px Manrope";
-    ctx.textAlign = "center";
-    ctx.fillText("Waiting for names", 0, 20);
-    ctx.restore();
+  if (names.length === 0) {
+    faceCtx.beginPath();
+    faceCtx.arc(0, 0, radius, 0, Math.PI * 2);
+    faceCtx.fillStyle = settings.appTheme === "dark" ? "#272727" : "#fffcf7";
+    faceCtx.fill();
+    faceCtx.fillStyle = settings.appTheme === "dark" ? "#9b9b9b" : "#6e6157";
+    faceCtx.font = `600 ${Math.round(radius * 0.09)}px Manrope`;
+    faceCtx.textAlign = "center";
+    faceCtx.fillText("Waiting for names", 0, radius * 0.03);
+    faceCtx.restore();
     return;
   }
 
-  const arc = (Math.PI * 2) / wheelNames.length;
-  const rimRadius = radius - 24;
-  const textRadius = radius - 80;
-
-  ctx.save();
-  ctx.translate(radius, radius);
-  ctx.rotate(rotation);
+  const arc = (Math.PI * 2) / names.length;
+  const textRadius = radius * 0.86;
 
   if (wheelImage) {
-    const diameter = rimRadius * 2;
-    const scale = Math.max(diameter / wheelImage.width, diameter / wheelImage.height);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(0, 0, rimRadius, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(
+    const scale = Math.max(size / wheelImage.width, size / wheelImage.height);
+    faceCtx.save();
+    faceCtx.beginPath();
+    faceCtx.arc(0, 0, radius, 0, Math.PI * 2);
+    faceCtx.clip();
+    faceCtx.drawImage(
       wheelImage,
       (-wheelImage.width * scale) / 2,
       (-wheelImage.height * scale) / 2,
       wheelImage.width * scale,
       wheelImage.height * scale
     );
-    ctx.restore();
+    faceCtx.restore();
   }
 
-  wheelNames.forEach((name, index) => {
+  names.forEach((name, index) => {
     const startAngle = index * arc;
-    const maxTextWidth = Math.min(radius * 0.58, Math.max(100, 2 * Math.sin(arc / 2) * (textRadius - 40)));
+    const maxTextWidth = Math.min(radius * 0.6, Math.max(radius * 0.17, 2 * Math.sin(arc / 2) * textRadius * 0.9));
 
     if (!wheelImage) {
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, rimRadius, startAngle, startAngle + arc);
-      ctx.closePath();
-      ctx.fillStyle = settings.palette[index % settings.palette.length];
-      ctx.fill();
+      faceCtx.beginPath();
+      faceCtx.moveTo(0, 0);
+      faceCtx.arc(0, 0, radius, startAngle, startAngle + arc);
+      faceCtx.closePath();
+      faceCtx.fillStyle = settings.palette[index % settings.palette.length];
+      faceCtx.fill();
     }
 
-    ctx.save();
-    ctx.rotate(startAngle + arc / 2);
-    ctx.translate(textRadius, 0);
-    ctx.textAlign = "right";
-    ctx.fillStyle = settings.textColor;
+    faceCtx.save();
+    faceCtx.rotate(startAngle + arc / 2);
+    faceCtx.translate(textRadius, 0);
+    faceCtx.textAlign = "right";
+    faceCtx.fillStyle = settings.textColor;
     if (wheelImage) {
-      ctx.shadowColor = "rgba(31, 26, 22, 0.5)";
-      ctx.shadowBlur = 12;
+      faceCtx.shadowColor = "rgba(31, 26, 22, 0.5)";
+      faceCtx.shadowBlur = 20;
     }
-    const fontSize = fitFontSize(name, 50, 14, maxTextWidth);
-    ctx.font = `700 ${fontSize}px Manrope`;
-    ctx.fillText(name, 0, fontSize * 0.34);
-    ctx.restore();
+    const fontSize = fitFontSize(name, Math.round(radius * 0.085), Math.round(radius * 0.024), maxTextWidth);
+    faceCtx.font = `700 ${fontSize}px Manrope`;
+    faceCtx.fillText(name, 0, fontSize * 0.34);
+    faceCtx.restore();
   });
 
-  ctx.restore();
+  faceCtx.restore();
+}
+
+// Flat fallback: turns the face on the 2D canvas.
+const flatRenderer = {
+  setFace() {},
+  setPointer() {},
+  resize() {},
+  render(angle) {
+    const size = canvas.width;
+    const radius = size / 2;
+    const faceRadius = radius - 24;
+    ctx.clearRect(0, 0, size, size);
+    ctx.save();
+    ctx.translate(radius, radius);
+    ctx.rotate(angle);
+    ctx.drawImage(faceCanvas, -faceRadius, -faceRadius, faceRadius * 2, faceRadius * 2);
+    ctx.restore();
+  },
+};
+let renderer = flatRenderer;
+
+function drawWheel() {
+  if (faceDirty) {
+    faceDirty = false;
+    drawFace();
+    renderer.setFace(names.length);
+  }
+  renderer.render(rotation);
+}
+
+function setNames(next) {
+  names = next;
+  faceDirty = true;
+}
+
+// Switches to the 3D wheel once three.js has loaded; stays flat if WebGL is unavailable.
+function useWheel3D() {
+  if (renderer !== flatRenderer || !window.createWheel3D) {
+    return;
+  }
+  try {
+    renderer = window.createWheel3D({ canvas: canvas3d, faceCanvas });
+  } catch {
+    renderer = flatRenderer;
+    return;
+  }
+  document.body.classList.add("wheel-3d");
+  faceDirty = true;
+  updatePointer();
 }
 
 // ---- Motion ----
@@ -165,7 +219,7 @@ function playSpin(spin) {
   cancelAnimationFrame(spinAnimationId);
   hideReveal();
   currentSpinId = spin.spinId;
-  names = spin.names;
+  setNames(spin.names);
 
   const remainingMs = spin.durationMs - (spin.elapsedMs || 0);
   if (remainingMs <= 0) {
@@ -236,6 +290,7 @@ function hideReveal() {
 
 function applySettings(next) {
   settings = normalizeSettings(next);
+  faceDirty = true;
   const root = document.documentElement;
   root.dataset.theme = settings.appTheme;
   root.style.setProperty("--page", settings.wheelBackdropColor);
@@ -246,11 +301,13 @@ function applySettings(next) {
   if (settings.wheelBackgroundImage !== wheelImageSource) {
     wheelImageSource = settings.wheelBackgroundImage;
     wheelImage = null;
+    faceDirty = true;
     if (wheelImageSource) {
       const image = new Image();
       image.onload = () => {
         if (wheelImageSource === image.src) {
           wheelImage = image;
+          faceDirty = true;
           drawWheel();
         }
       };
@@ -289,7 +346,7 @@ async function refreshEvent() {
     applySettings(event.settings);
     applyPrizeBanner(event);
     if (!spinAnimationId && reveal.hidden) {
-      names = event.names || [];
+      setNames(event.names || []);
       drawWheel();
       startIdleSpin();
     }
@@ -388,7 +445,12 @@ if (!isPreview) {
 
 // The wheel resizes when the prize banner comes and goes, not just with the window.
 new ResizeObserver(updatePointer).observe(wheelStage);
-document.fonts.ready.then(() => drawWheel());
+document.fonts.ready.then(() => {
+  faceDirty = true;
+  drawWheel();
+});
+window.addEventListener("wheel3d-ready", useWheel3D);
+useWheel3D();
 updatePointer();
 drawWheel();
 refreshEvent();

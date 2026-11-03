@@ -82,6 +82,23 @@ canvas {
   filter: drop-shadow(0 16px 32px rgba(31, 26, 22, 0.22));
 }
 
+#wheel-3d {
+  position: absolute;
+  inset: 0;
+  display: none;
+  filter: none;
+}
+
+/* Once the 3D wheel is running it draws its own pointer and shadow. */
+.wheel-3d #wheel-3d {
+  display: block;
+}
+
+.wheel-3d #wheel,
+.wheel-3d .pointer-wrap {
+  display: none;
+}
+
 .pointer-wrap {
   position: absolute;
   top: 50%;

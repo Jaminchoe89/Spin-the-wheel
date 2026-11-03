@@ -32,6 +32,7 @@ const publicFiles = new Set([
   "display.css",
   "shared.js",
   "sounds.js",
+  "wheel3d.js",
   "winner.mp3",
   "styles.css",
 ]);

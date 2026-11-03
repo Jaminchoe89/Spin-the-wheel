@@ -16,6 +16,7 @@
         <div class="wheel-stage" id="wheel-stage">
           <div class="pointer-wrap" id="pointer-wrap"><div class="pointer"></div></div>
           <canvas id="wheel" width="1200" height="1200" aria-label="Prize wheel"></canvas>
+          <canvas id="wheel-3d" aria-hidden="true"></canvas>
         </div>
       </div>
 
@@ -41,5 +42,14 @@
     <script src="/shared.js"></script>
     <script src="/sounds.js"></script>
     <script src="/display.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="/wheel3d.js"></script>
   </body>
 </html>
