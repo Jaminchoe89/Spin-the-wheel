@@ -285,6 +285,9 @@ function playSpin(spin) {
   cancelAnimationFrame(spinAnimationId);
   hideReveal();
   currentSpinId = spin.spinId;
+  // Use the same prize snapshot as the reveal, even if the saved selection is behind.
+  renderPrizeBanner(spin.prize ? { name: spin.prize, detail: spin.prizeDetail || "" } : null);
+  refreshPending = true;
   setNames(spin.names);
 
   const remainingMs = spin.durationMs - (spin.elapsedMs || 0);
@@ -415,16 +418,11 @@ function applySettings(next) {
   }
 }
 
-function applyPrizeBanner(event) {
-  const prizes = parsePrizes(event.prizesText);
-  const awards = Array.isArray(event.awards) ? event.awards : [];
-  const current = describeCurrentPrize(prizes, awards, event.currentPrizeIndex || 0);
+function renderPrizeBanner(current) {
   prizeBanner.hidden = !current;
   document.body.classList.toggle("has-prizes", Boolean(current));
-  if (current) {
-    prizeBannerName.textContent = current.name;
-    prizeBannerDetail.textContent = current.detail;
-  }
+  prizeBannerName.textContent = current?.name || "";
+  prizeBannerDetail.textContent = current?.detail || "";
 }
 
 async function refreshEvent() {
@@ -443,11 +441,16 @@ async function refreshEvent() {
     const event = await response.json();
     document.title = `${event.name} · Display`;
     applySettings(event.settings);
-    applyPrizeBanner(event);
     if (!spinAnimationId && reveal.hidden) {
+      const prizes = parsePrizes(event.prizesText);
+      const awards = Array.isArray(event.awards) ? event.awards : [];
+      renderPrizeBanner(describeCurrentPrize(prizes, awards, event.currentPrizeIndex || 0));
       setNames(event.names || []);
       drawWheel();
       startIdleSpin();
+    } else {
+      // A spin may have started while the event request was in flight.
+      refreshPending = true;
     }
   } catch {
     // The live connection retries; the next update will refresh.

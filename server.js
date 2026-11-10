@@ -423,6 +423,7 @@ async function handleLiveCommand(req, res, slug) {
       durationMs: Math.min(30000, Math.max(1000, Number(command.durationMs) || 7000)),
       winner: names[targetIndex],
       prize: String(command.prize || ""),
+      prizeDetail: String(command.prizeDetail || ""),
       header: String(command.header || ""),
       receivedAt: Date.now(),
     };

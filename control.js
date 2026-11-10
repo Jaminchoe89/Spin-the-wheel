@@ -481,6 +481,7 @@ async function spin() {
   phase = "starting";
 
   const prize = prizes[currentPrizeIndex]?.name || "";
+  const prizeDetail = describeCurrentPrize(prizes, awards, currentPrizeIndex)?.detail || "";
   const targetIndex = Math.floor(Math.random() * names.length);
   const durationMs = Math.round(settings.spinDurationSeconds * 1000);
 
@@ -492,6 +493,7 @@ async function spin() {
       targetIndex,
       durationMs,
       prize,
+      prizeDetail,
       header: settings.popupHeaderText,
     });
   } catch (error) {
